@@ -3,6 +3,7 @@
   --acc:#22c55e; --warn:#f59e0b; --bad:#ef4444; --line:#2b3646; --btn:#2563eb;
 }
 *{box-sizing:border-box}
+[hidden]{display:none !important}
 body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 system-ui,Segoe UI,Roboto,Arial,sans-serif}
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px 22px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
 h1{margin:0;font-size:22px}
