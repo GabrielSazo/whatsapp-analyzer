@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analizador WhatsApp — Respuestas y tiempos por ticket</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <h1>Analizador WhatsApp</h1>
+    <p class="sub">Respuestas y tiempos por ticket / código · 100% local, el archivo no sale de tu equipo</p>
+  </div>
+  <div class="top-actions">
+    <button id="btnDemo" class="btn ghost" type="button">Ver ejemplo</button>
+    <button id="btnReset" class="btn ghost" type="button" hidden>Analizar otro archivo</button>
+  </div>
+</header>
+
+<main>
+  <!-- Paso 1: carga -->
+  <section id="dropZone" class="drop" tabindex="0" role="button" aria-label="Cargar archivo de chat">
+    <div class="drop-icon">📄</div>
+    <p><strong>Arrastra el <code>.txt</code> exportado de WhatsApp</strong> o haz clic para elegirlo</p>
+    <p class="hint">Grupo &gt; Nombre del grupo &gt; Exportar chat &gt; Sin archivos · Acepta exports en español</p>
+    <input id="fileInput" type="file" accept=".txt,text/plain" hidden>
+    <div id="loadProgress" class="progress" hidden><div class="bar"></div><span>Cargando…</span></div>
+  </section>
+
+  <!-- Paso 2: dashboard -->
+  <section id="dashboard" hidden>
+    <div class="fileline">
+      <span id="fileName"></span><span id="fileMeta" class="muted"></span>
+    </div>
+
+    <div class="controls">
+      <label>Ventana de respuesta
+        <select id="optWindow">
+          <option value="4">4 horas</option>
+          <option value="8">8 horas</option>
+          <option value="24" selected>24 horas</option>
+          <option value="48">48 horas</option>
+          <option value="168">7 días</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="optSupportOnly"> Solo contar respuesta del equipo de soporte</label>
+      <button id="btnRoster" class="btn ghost" type="button">Equipo de soporte (<span id="rosterCount">0</span>)</button>
+      <button id="btnCsv" class="btn" type="button">Exportar CSV</button>
+      <button id="btnJson" class="btn ghost" type="button">Exportar JSON</button>
+    </div>
+
+    <div id="rosterPanel" class="roster" hidden>
+      <p class="muted">Marca quiénes son soporte. Los mensajes de los demás <strong>no</strong> cuentan como respuesta cuando el filtro está activo. Sugerencia automática según confirmaciones.</p>
+      <div id="rosterList" class="roster-list"></div>
+    </div>
+
+    <div id="kpis" class="kpis"></div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Solicitan más</h2>
+        <ol id="topReq" class="toplist"></ol>
+      </div>
+      <div class="card">
+        <h2>Responden más</h2>
+        <ol id="topResp" class="toplist"></ol>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Actividad por semana</h2>
+      <canvas id="chart" height="120"></canvas>
+      <p class="muted small">Mensajes del grupo por semana + tickets nuevos. Te muestra picos de carga.</p>
+    </div>
+
+    <div class="card">
+      <h2>Tickets <span id="tblCount" class="muted"></span></h2>
+      <div class="filters">
+        <input id="fSearch" type="search" placeholder="Buscar código, solicitante o respondedor…">
+        <select id="fStatus">
+          <option value="">Todos</option>
+          <option value="respondido">Respondidos</option>
+          <option value="pendiente">Pendientes</option>
+        </select>
+        <select id="fConf">
+          <option value="">Toda confianza</option>
+          <option value="alta">Confianza alta</option>
+          <option value="media">Confianza media</option>
+        </select>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th>Código</th><th>Solicita</th><th>Fecha solicitud</th><th>Responde</th>
+          <th>Tiempo resp.</th><th>Estado</th><th>Conf.</th><th></th>
+        </tr></thead>
+        <tbody id="tblBody"></tbody>
+      </table></div>
+      <div class="pager">
+        <button id="pgPrev" class="btn ghost" type="button">← Anterior</button>
+        <span id="pgInfo" class="muted"></span>
+        <button id="pgNext" class="btn ghost" type="button">Siguiente →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Detalle -->
+  <div id="drawer" class="drawer" hidden>
+    <div class="drawer-box">
+      <button id="drawerClose" class="btn ghost" type="button">✕ Cerrar</button>
+      <h2 id="dTitle"></h2>
+      <div id="dBody"></div>
+    </div>
+  </div>
+</main>
+
+<footer class="muted small">
+  Ticket = 8–9 dígitos que empiezan con 15 o 16 (normaliza 00 y GTM-). Respuesta = primer mensaje de otro autor dentro de la ventana que repite el código o parece confirmación/gestión. Revisa la columna Conf.
+</footer>
+
+<script src="parser.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
