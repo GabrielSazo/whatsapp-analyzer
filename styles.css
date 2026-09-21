@@ -35,8 +35,14 @@ select,input[type=search]{background:var(--panel2);color:var(--txt);border:1px s
 .kpi.good b{color:var(--acc)} .kpi.bad b{color:var(--bad)} .kpi.warn b{color:var(--warn)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 @media(max-width:700px){.grid2{grid-template-columns:1fr}}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;position:relative}
 .card h2{margin:0 0 10px;font-size:16px}
+.row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.row h2{margin:0}
+.chart-wrap{position:relative}
+canvas#chart{width:100%;display:block;cursor:crosshair}
+.tip{position:absolute;background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;pointer-events:none;z-index:5;box-shadow:0 4px 16px rgba(0,0,0,.5);white-space:nowrap}
+.tip b{color:#fff}
 .toplist{margin:0;padding-left:22px}
 .toplist li{margin:3px 0;font-size:14px}
 .toplist span{color:var(--mut)}

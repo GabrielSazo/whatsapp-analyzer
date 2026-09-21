@@ -223,10 +223,49 @@
     return score.slice(0, limit || 10);
   }
 
+  /** Resume un subconjunto de tickets (ej. filtrado por mes) con las mismas métricas. */
+  function summarize(tickets) {
+    var responded = tickets.filter(function (t) { return t.status === 'respondido'; });
+    var diffs = responded.map(function (t) { return t.minutesToResponse; }).sort(function (a, b) { return a - b; });
+    function pct(q) {
+      if (!diffs.length) return null;
+      return diffs[Math.min(diffs.length - 1, Math.floor(q * diffs.length))];
+    }
+    var avg = diffs.length ? diffs.reduce(function (a, b) { return a + b; }, 0) / diffs.length : null;
+    return {
+      total: tickets.length,
+      responded: responded.length,
+      pending: tickets.length - responded.length,
+      responseRate: tickets.length ? Math.round((responded.length / tickets.length) * 1000) / 10 : 0,
+      avgMinutes: avg != null ? Math.round(avg * 10) / 10 : null,
+      medianMinutes: pct(0.5),
+      p90Minutes: pct(0.9)
+    };
+  }
+
+  function topFrom(tickets, field, n) {
+    var obj = {};
+    tickets.forEach(function (t) {
+      var k = t[field];
+      if (k) obj[k] = (obj[k] || 0) + 1;
+    });
+    return Object.keys(obj).map(function (k) { return { name: k, count: obj[k] }; })
+      .sort(function (a, b) { return b.count - a.count; }).slice(0, n || 10);
+  }
+
+  /** Clave YYYY-MM de una fecha (para filtro/agrupación mensual). */
+  function monthKey(d) {
+    d = d instanceof Date ? d : new Date(d);
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+  }
+
   return {
     parseChat: parseChat,
     ticketsOf: ticketsOf,
     analyze: analyze,
+    summarize: summarize,
+    topFrom: topFrom,
+    monthKey: monthKey,
     suggestSupport: suggestSupport,
     isSystem: isSystem
   };

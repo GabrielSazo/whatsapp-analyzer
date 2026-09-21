@@ -5,8 +5,14 @@
 
   var state = {
     fileName: '', messages: [], result: null, authors: [],
-    support: [], filtered: [], page: 0, perPage: 100
+    support: [], monthFiltered: [], filtered: [], page: 0, perPage: 100,
+    month: '', gran: 'week', chartBuckets: [], chartBound: false
   };
+
+  function monthLabel(key) {
+    var p = String(key).split('-');
+    return new Date(+p[0], +p[1] - 1, 1).toLocaleString('es', { month: 'short', year: 'numeric' });
+  }
 
   function fmtDate(d) {
     if (!d) return '—';
@@ -140,26 +146,53 @@
   // ---------- cómputo ----------
   $('optWindow').addEventListener('change', recompute);
   $('optSupportOnly').addEventListener('change', recompute);
+  $('fMonth').addEventListener('change', function () { state.month = this.value; renderAll(); });
+  $('optGran').addEventListener('change', function () { state.gran = this.value; renderChart(); });
 
   function recompute() {
     if (!state.messages.length) return;
-    var res = WAParser.analyze(state.messages, {
+    state.result = WAParser.analyze(state.messages, {
       windowHours: parseInt($('optWindow').value, 10),
       supportOnly: $('optSupportOnly').checked,
       supportSet: state.support
     });
-    state.result = res;
-    state.page = 0;
-    renderKpis(res.stats);
-    renderTops(res);
-    renderChart(res);
-    applyFilters();
+    buildMonthOptions();
+    renderAll();
   }
 
-  function renderKpis(s) {
+  function buildMonthOptions() {
+    var seen = {}, keys = [];
+    state.result.tickets.forEach(function (t) {
+      var k = WAParser.monthKey(t.requestedAt);
+      if (!seen[k]) { seen[k] = 1; keys.push(k); }
+    });
+    keys.sort();
+    var sel = $('fMonth'), cur = state.month;
+    sel.innerHTML = '<option value="">Todos</option>' + keys.map(function (k) {
+      return '<option value="' + k + '"' + (k === cur ? ' selected' : '') + '>' + esc(monthLabel(k)) + '</option>';
+    }).join('');
+    if (cur && !seen[cur]) state.month = '';
+  }
+
+  function renderAll() {
+    if (!state.result) return;
+    state.monthFiltered = state.month
+      ? state.result.tickets.filter(function (t) { return WAParser.monthKey(t.requestedAt) === state.month; })
+      : state.result.tickets;
+    var s = WAParser.summarize(state.monthFiltered);
+    s.windowHours = parseInt($('optWindow').value, 10);
+    renderKpis(s, state.month ? ' · ' + monthLabel(state.month) : '');
+    renderTops(WAParser.topFrom(state.monthFiltered, 'requester', 10),
+               WAParser.topFrom(state.monthFiltered, 'responder', 10));
+    state.page = 0;
+    applyFilters();
+    renderChart();
+  }
+
+  function renderKpis(s, suffix) {
     var el = $('kpis');
     el.innerHTML =
-      kpi(s.total.toLocaleString('es-GT'), 'tickets con código') +
+      kpi(s.total.toLocaleString('es-GT'), 'tickets con código' + suffix) +
       kpi(s.responded.toLocaleString('es-GT') + ' (' + s.responseRate + '%)', 'respondidos', 'good') +
       kpi(s.pending.toLocaleString('es-GT'), 'pendientes', s.pending ? 'bad' : '') +
       kpi(fmtDur(s.medianMinutes), 'mediana 1ª respuesta') +
@@ -170,46 +203,121 @@
     }
   }
 
-  function renderTops(res) {
-    $('topReq').innerHTML = res.topRequesters.slice(0, 10).map(function (r) {
+  function renderTops(topReq, topResp) {
+    $('topReq').innerHTML = topReq.map(function (r) {
       return '<li>' + esc(r.name) + ' <span>(' + r.count + ' tickets)</span></li>';
     }).join('') || '<li class="muted">Sin datos</li>';
-    $('topResp').innerHTML = res.topResponders.slice(0, 10).map(function (r) {
+    $('topResp').innerHTML = topResp.map(function (r) {
       return '<li>' + esc(r.name) + ' <span>(' + r.count + ' respuestas)</span></li>';
     }).join('') || '<li class="muted">Sin datos</li>';
   }
 
-  function renderChart(res) {
+  function renderChart() {
+    var res = state.result;
+    if (!res) return;
     var cv = $('chart'), ctx = cv.getContext('2d');
-    var W = cv.width = cv.parentElement.clientWidth - 32, H = cv.height = 160;
+    var W = cv.width = Math.max(300, cv.parentElement.clientWidth), H = cv.height = 190;
+    var padB = 24, padT = 20;
     ctx.clearRect(0, 0, W, H);
-    // buckets semanales
     var msgs = state.messages.filter(function (m) { return !WAParser.isSystem(m); });
     if (!msgs.length) return;
+    var buckets = state.gran === 'month'
+      ? monthBuckets(msgs, res.tickets)
+      : weekBuckets(msgs, res.tickets);
+    state.chartBuckets = buckets;
+    var max = 1;
+    buckets.forEach(function (b) { max = Math.max(max, b.msgs); });
+    // leyenda
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#2563eb'; ctx.fillRect(4, 4, 10, 10);
+    ctx.fillStyle = '#93a1b3'; ctx.fillText('mensajes', 18, 13);
+    ctx.fillStyle = '#22c55e'; ctx.fillRect(100, 4, 10, 10);
+    ctx.fillStyle = '#93a1b3'; ctx.fillText('tickets nuevos', 114, 13);
+    var bw = W / buckets.length;
+    buckets.forEach(function (b, i) {
+      var dim = state.month && b.months.indexOf(state.month) === -1;
+      ctx.globalAlpha = dim ? 0.25 : 1;
+      var h = (b.msgs / max) * (H - padB - padT);
+      ctx.fillStyle = '#2563eb';
+      ctx.fillRect(i * bw + 1, H - padB - h, Math.max(1, bw - 2), h);
+      var th = (b.ticks / max) * (H - padB - padT);
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(i * bw + 1, H - padB - Math.max(2, th), Math.max(1, bw - 2), Math.max(2, th));
+      ctx.globalAlpha = 1;
+      if (b.showLabel && bw > 22) {
+        ctx.fillStyle = '#93a1b3'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.label, i * bw + bw / 2, H - 8);
+        ctx.textAlign = 'left';
+      }
+    });
+    bindChartTip();
+  }
+
+  function weekBuckets(msgs, tickets) {
     var t0 = msgs[0].dt.getTime(), t1 = msgs[msgs.length - 1].dt.getTime();
     var n = Math.min(52, Math.max(4, Math.round((t1 - t0) / (7 * 864e5)) || 4));
-    var counts = new Array(n).fill(0), ticks = new Array(n).fill(0);
+    var span = Math.max(1, t1 - t0);
+    var out = [];
+    for (var i = 0; i < n; i++) out.push({ msgs: 0, ticks: 0, months: {}, start: t0 + (span * i) / n });
+    function idx(t) { return Math.min(n - 1, Math.floor(((t - t0) / span) * n)); }
     msgs.forEach(function (m) {
-      var i = Math.min(n - 1, Math.floor(((m.dt.getTime() - t0) / Math.max(1, t1 - t0)) * n));
-      counts[i]++;
+      var b = out[idx(m.dt.getTime())];
+      b.msgs++;
+      b.months[WAParser.monthKey(m.dt)] = 1;
     });
-    res.tickets.forEach(function (t) {
-      var i = Math.min(n - 1, Math.floor(((new Date(t.requestedAt).getTime() - t0) / Math.max(1, t1 - t0)) * n));
-      ticks[i]++;
+    tickets.forEach(function (t) { out[idx(new Date(t.requestedAt).getTime())].ticks++; });
+    var prevMk = null;
+    return out.map(function (b, i) {
+      var d = new Date(b.start);
+      var mk = WAParser.monthKey(d);
+      var show = i === 0 || mk !== prevMk;
+      prevMk = mk;
+      var lab = ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
+      return { label: lab, full: 'Semana del ' + d.toLocaleString('es', { day: 'numeric', month: 'short' }),
+        msgs: b.msgs, ticks: b.ticks, months: Object.keys(b.months), showLabel: show };
     });
-    var max = Math.max.apply(null, counts.concat([1]));
-    var bw = W / n;
-    for (var i = 0; i < n; i++) {
-      var h = (counts[i] / max) * (H - 20);
-      ctx.fillStyle = '#2563eb';
-      ctx.fillRect(i * bw + 1, H - 14 - h, bw - 2, h);
-      var th = (ticks[i] / max) * (H - 20);
-      ctx.fillStyle = '#22c55e';
-      ctx.fillRect(i * bw + 1, H - 14 - th, bw - 2, Math.max(2, th));
+  }
+
+  function monthBuckets(msgs, tickets) {
+    var d0 = msgs[0].dt, d1 = msgs[msgs.length - 1].dt;
+    var keys = [], cur = new Date(d0.getFullYear(), d0.getMonth(), 1);
+    var end = new Date(d1.getFullYear(), d1.getMonth(), 1);
+    while (cur <= end) {
+      keys.push(WAParser.monthKey(cur));
+      cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
     }
-    ctx.fillStyle = '#93a1b3';
-    ctx.font = '11px system-ui';
-    ctx.fillText('■ mensajes   ■ tickets nuevos', 4, 12);
+    var map = {};
+    keys.forEach(function (k) { map[k] = { msgs: 0, ticks: 0 }; });
+    msgs.forEach(function (m) { map[WAParser.monthKey(m.dt)].msgs++; });
+    tickets.forEach(function (t) { map[WAParser.monthKey(t.requestedAt)].ticks++; });
+    return keys.map(function (k) {
+      return { label: monthLabel(k), full: monthLabel(k), msgs: map[k].msgs,
+        ticks: map[k].ticks, months: [k], showLabel: true };
+    });
+  }
+
+  function bindChartTip() {
+    if (state.chartBound) return;
+    state.chartBound = true;
+    var cv = $('chart'), tip = $('chartTip');
+    cv.addEventListener('mousemove', function (e) {
+      var n = state.chartBuckets.length;
+      if (!n) return;
+      var r = cv.getBoundingClientRect();
+      var i = Math.floor(((e.clientX - r.left) / r.width) * n);
+      i = Math.max(0, Math.min(n - 1, i));
+      var b = state.chartBuckets[i];
+      tip.innerHTML = '<b>' + esc(b.full) + '</b><br>' +
+        'Mensajes: <b>' + b.msgs.toLocaleString('es-GT') + '</b><br>' +
+        'Tickets nuevos: <b>' + b.ticks.toLocaleString('es-GT') + '</b>';
+      var wr = cv.parentElement.getBoundingClientRect();
+      var lx = e.clientX - wr.left + 14, ly = e.clientY - wr.top + 14;
+      if (lx + 190 > wr.width) lx -= 200;
+      tip.style.left = lx + 'px';
+      tip.style.top = ly + 'px';
+      tip.hidden = false;
+    });
+    cv.addEventListener('mouseleave', function () { tip.hidden = true; });
   }
 
   // ---------- tabla ----------
@@ -225,7 +333,8 @@
   function applyFilters() {
     var q = $('fSearch').value.trim().toLowerCase();
     var st = $('fStatus').value, cf = $('fConf').value;
-    state.filtered = state.result.tickets.filter(function (t) {
+    var base = state.monthFiltered;
+    state.filtered = base.filter(function (t) {
       if (st && t.status !== st) return false;
       if (cf && t.confidence !== cf && t.status !== 'pendiente') return false;
       if (q && (t.code + ' ' + t.requester + ' ' + (t.responder || '')).toLowerCase().indexOf(q) === -1) return false;
@@ -239,7 +348,7 @@
     var start = state.page * state.perPage;
     var rows = state.filtered.slice(start, start + state.perPage);
     $('tblCount').textContent = '· ' + state.filtered.length.toLocaleString('es-GT') + ' de ' +
-      state.result.tickets.length.toLocaleString('es-GT');
+      state.monthFiltered.length.toLocaleString('es-GT') + (state.month ? ' (' + monthLabel(state.month) + ')' : '');
     $('pgInfo').textContent = state.filtered.length
       ? ('Página ' + (state.page + 1) + ' de ' + Math.ceil(state.filtered.length / state.perPage))
       : 'Sin resultados';
@@ -312,10 +421,10 @@
         t.minutesToResponse == null ? '' : t.minutesToResponse, t.status, t.confidence || '', t.messageCount]
         .map(csvCell).join(',');
     }).join('\n');
-    download('tickets-whatsapp.csv', '﻿' + head + body, 'text/csv;charset=utf-8');
+    download('tickets-whatsapp' + (state.month ? '-' + state.month : '') + '.csv', '﻿' + head + body, 'text/csv;charset=utf-8');
   });
   $('btnJson').addEventListener('click', function () {
     if (!state.result) return;
-    download('tickets-whatsapp.json', JSON.stringify({ archivo: state.fileName, stats: state.result.stats, tickets: state.filtered }, null, 1), 'application/json');
+    download('tickets-whatsapp' + (state.month ? '-' + state.month : '') + '.json', JSON.stringify({ archivo: state.fileName, mes: state.month || 'todos', stats: WAParser.summarize(state.filtered), tickets: state.filtered }, null, 1), 'application/json');
   });
 })();

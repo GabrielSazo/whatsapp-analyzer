@@ -45,6 +45,11 @@
         </select>
       </label>
       <label class="check"><input type="checkbox" id="optSupportOnly"> Solo contar respuesta del equipo de soporte</label>
+      <label>Mes
+        <select id="fMonth">
+          <option value="">Todos</option>
+        </select>
+      </label>
       <button id="btnRoster" class="btn ghost" type="button">Equipo de soporte (<span id="rosterCount">0</span>)</button>
       <button id="btnCsv" class="btn" type="button">Exportar CSV</button>
       <button id="btnJson" class="btn ghost" type="button">Exportar JSON</button>
@@ -69,9 +74,18 @@
     </div>
 
     <div class="card">
-      <h2>Actividad por semana</h2>
-      <canvas id="chart" height="120"></canvas>
-      <p class="muted small">Mensajes del grupo por semana + tickets nuevos. Te muestra picos de carga.</p>
+      <div class="row">
+        <h2>Actividad</h2>
+        <select id="optGran">
+          <option value="week">Por semana</option>
+          <option value="month">Por mes</option>
+        </select>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chart" height="160"></canvas>
+        <div id="chartTip" class="tip" hidden></div>
+      </div>
+      <p class="muted small">Mensajes del grupo + tickets nuevos. Pasa el cursor sobre cada barra para ver los valores.</p>
     </div>
 
     <div class="card">
