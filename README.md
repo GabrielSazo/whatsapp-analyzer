@@ -64,5 +64,6 @@ npx serve .
 
 - WhatsApp Cloud API **no** puede leer grupos existentes, por eso este analizador es por export `.txt`.
 - Tiempos con resolución de **minuto** (el export no trae segundos): una respuesta dentro
-  del mismo minuto se muestra como **< 1 min**; el resto es aproximado ±1 min.
+  del mismo minuto se muestra como **< 1 min** y cuenta como **0.5 min** en los promedios;
+  el resto es aproximado ±1 min.
 - Mensajes `Se eliminó / Se editó` se excluyen.

@@ -149,6 +149,10 @@
         break;
       }
       var minutes = found ? Math.round(((found.msg.dt - f.msg.dt) / 60000) * 10) / 10 : null;
+      // El export solo trae hora:minuto. Si cayó en el mismo minuto, el tiempo real
+      // está entre 0 y 1 min: se imputa 0.5 (punto medio) para no subestimar promedios.
+      // En pantalla se muestra "< 1 min".
+      if (minutes === 0) minutes = 0.5;
       return {
         code: code,
         requester: f.msg.author,
