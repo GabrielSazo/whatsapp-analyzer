@@ -10,7 +10,8 @@ Todo se procesa **en tu navegador, 100% local**. El archivo nunca se sube a ning
 
 1. En WhatsApp: Grupo → Nombre del grupo → **Exportar chat → Sin archivos** → obtienes un `.txt`.
 2. Abre la app publicada en GitHub Pages (ver despliegue abajo) o `index.html` en local.
-3. Arrastra el `.txt` o usa **Ver ejemplo** para probar con datos ficticios.
+3. Arrastra uno o varios `.txt` (uno por grupo de WhatsApp). Cada grupo se analiza por
+   separado — las respuestas nunca cruzan de un grupo a otro — y puedes filtrar por grupo.
 4. Ajusta la **ventana de respuesta** (4h / 8h / 24h / 7d) y el filtro
    **Solo contar respuesta del equipo de soporte** + el roster sugerido.
 5. Filtra por estado/confianza/búsqueda, abre el **detalle** de cada ticket y
@@ -65,5 +66,6 @@ npx serve .
 - WhatsApp Cloud API **no** puede leer grupos existentes, por eso este analizador es por export `.txt`.
 - Tiempos con resolución de **minuto** (el export no trae segundos): una respuesta dentro
   del mismo minuto se muestra como **< 1 min** y cuenta como **0.5 min** en los promedios;
-  el resto es aproximado ±1 min.
+  el resto es aproximado ±1 min. La casilla **+1 min** suma un minuto a todos los tiempos
+  (criterio de exploración, activada por defecto).
 - Mensajes `Se eliminó / Se editó` se excluyen.

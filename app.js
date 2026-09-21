@@ -4,7 +4,7 @@
   var $ = function (id) { return document.getElementById(id); };
 
   var state = {
-    fileName: '', messages: [], result: null, authors: [],
+    fileName: '', messages: [], groups: [], group: '', result: null, authors: [],
     support: [], monthFiltered: [], filtered: [], page: 0, perPage: 100,
     month: '', gran: 'week', chartBuckets: [], chartBound: false
   };
@@ -44,45 +44,70 @@
     drop.addEventListener(ev, function (e) { e.preventDefault(); drop.style.borderColor = ''; });
   });
   drop.addEventListener('drop', function (e) {
-    if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files.length) loadFiles(Array.prototype.slice.call(e.dataTransfer.files));
   });
-  input.addEventListener('change', function () { if (input.files.length) loadFile(input.files[0]); });
+  input.addEventListener('change', function () {
+    if (input.files.length) loadFiles(Array.prototype.slice.call(input.files));
+    input.value = '';
+  });
   $('btnReset').addEventListener('click', function () {
     $('dashboard').hidden = true; drop.style.display = ''; $('btnReset').hidden = true;
-    input.value = ''; state.messages = []; state.result = null;
+    state.messages = []; state.groups = []; state.group = ''; state.result = null;
   });
 
-  function loadFile(file) {
+  function shortName(name) {
+    var b = String(name).replace(/\.txt$/i, '').trim() || 'grupo';
+    return b.length > 40 ? b.slice(0, 40) + '…' : b;
+  }
+
+  function loadFiles(files) {
+    files = files.filter(function (f) { return /\.txt$/i.test(f.name) || f.type === 'text/plain'; });
+    if (!files.length) { alert('Elige archivos .txt exportados de WhatsApp.'); return; }
     $('loadProgress').hidden = false;
-    var reader = new FileReader();
-    reader.onload = function () {
-      setTimeout(function () {
-        try {
-          var text = reader.result;
-          var msgs = WAParser.parseChat(text);
-          if (!msgs.length) throw new Error('No se reconocieron mensajes. ¿Es el .txt exportado de WhatsApp?');
-          state.fileName = file.name;
-          state.messages = msgs;
-          var sugg = WAParser.suggestSupport(msgs, 8).map(function (s) { return s.name; });
-          state.support = sugg;
-          state.authors = uniqueAuthors(msgs);
-          $('loadProgress').hidden = true;
-          drop.style.display = 'none';
-          $('dashboard').hidden = false;
-          $('btnReset').hidden = false;
-          $('fileName').textContent = file.name;
-          $('fileMeta').textContent = msgs.length.toLocaleString('es-GT') + ' mensajes · ' +
-            fmtDate(msgs[0].dt) + ' → ' + fmtDate(msgs[msgs.length - 1].dt);
-          buildRoster();
-          recompute();
-        } catch (err) {
-          $('loadProgress').hidden = true;
-          alert('Error: ' + err.message);
-        }
-      }, 30);
-    };
-    reader.onerror = function () { $('loadProgress').hidden = true; alert('No se pudo leer el archivo.'); };
-    reader.readAsText(file, 'utf-8');
+    var reads = files.map(function (f) {
+      return new Promise(function (resolve, reject) {
+        var r = new FileReader();
+        r.onload = function () { resolve({ name: f.name, text: r.result }); };
+        r.onerror = reject;
+        r.readAsText(f, 'utf-8');
+      });
+    });
+    Promise.all(reads).then(function (docs) {
+      try {
+        var used = {};
+        state.messages = [];
+        state.groups = docs.map(function (d) {
+          var g = shortName(d.name), base = g, k = 2;
+          while (used[g]) g = base + ' (' + (k++) + ')';
+          used[g] = 1;
+          var msgs = WAParser.parseChat(d.text);
+          if (!msgs.length) throw new Error('Sin mensajes reconocidos en ' + d.name);
+          msgs.forEach(function (m) { m.grp = g; });
+          state.messages = state.messages.concat(msgs);
+          return { name: g, file: d.name, count: msgs.length };
+        });
+        state.messages.sort(function (a, b) { return a.dt - b.dt; });
+        state.group = '';
+        var sugg = WAParser.suggestSupport(state.messages, 8).map(function (s) { return s.name; });
+        state.support = sugg;
+        state.authors = uniqueAuthors(state.messages);
+        $('loadProgress').hidden = true;
+        drop.style.display = 'none';
+        $('dashboard').hidden = false;
+        $('btnReset').hidden = false;
+        $('fileName').textContent = docs.length > 1 ? docs.length + ' archivos' : docs[0].name;
+        $('fileMeta').textContent = state.messages.length.toLocaleString('es-GT') + ' mensajes · ' +
+          state.groups.map(function (g) { return g.name + ' (' + g.count.toLocaleString('es-GT') + ')'; }).join(' · ');
+        buildRoster();
+        recompute();
+      } catch (err) {
+        $('loadProgress').hidden = true;
+        alert('Error: ' + err.message);
+      }
+    }, function () {
+      $('loadProgress').hidden = true;
+      alert('No se pudieron leer los archivos.');
+    });
   }
 
   function uniqueAuthors(msgs) {
@@ -108,6 +133,9 @@
     ].join('\n');
     state.fileName = 'ejemplo.txt';
     state.messages = WAParser.parseChat(demo);
+    state.messages.forEach(function (m) { m.grp = 'ejemplo'; });
+    state.groups = [{ name: 'ejemplo', file: 'ejemplo.txt', count: state.messages.length }];
+    state.group = '';
     state.support = ['Katerin Lopez', 'Luis'];
     state.authors = uniqueAuthors(state.messages);
     drop.style.display = 'none';
@@ -146,18 +174,41 @@
   // ---------- cómputo ----------
   $('optWindow').addEventListener('change', recompute);
   $('optSupportOnly').addEventListener('change', recompute);
+  $('optPlusOne').addEventListener('change', recompute);
   $('fMonth').addEventListener('change', function () { state.month = this.value; renderAll(); });
+  $('fGroup').addEventListener('change', function () { state.group = this.value; renderAll(); });
   $('optGran').addEventListener('change', function () { state.gran = this.value; renderChart(); });
 
   function recompute() {
     if (!state.messages.length) return;
-    state.result = WAParser.analyze(state.messages, {
+    // Análisis separado por grupo: las respuestas nunca cruzan de un grupo a otro.
+    var opts = {
       windowHours: parseInt($('optWindow').value, 10),
       supportOnly: $('optSupportOnly').checked,
-      supportSet: state.support
+      supportSet: state.support,
+      plusOne: $('optPlusOne').checked
+    };
+    var merged = [];
+    state.groups.forEach(function (g) {
+      var gm = state.messages.filter(function (m) { return m.grp === g.name; });
+      var r = WAParser.analyze(gm, opts);
+      r.tickets.forEach(function (t) { t.grp = g.name; });
+      merged = merged.concat(r.tickets);
     });
+    merged.sort(function (a, b) { return b.requestedAt - a.requestedAt; });
+    state.result = { tickets: merged };
+    buildGroupOptions();
     buildMonthOptions();
     renderAll();
+  }
+
+  function buildGroupOptions() {
+    var sel = $('fGroup'), cur = state.group;
+    var names = state.groups.map(function (g) { return g.name; });
+    sel.innerHTML = '<option value="">Todos (' + names.length + ' grupos)</option>' + names.map(function (n) {
+      return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>';
+    }).join('');
+    if (cur && names.indexOf(cur) === -1) state.group = '';
   }
 
   function buildMonthOptions() {
@@ -176,12 +227,16 @@
 
   function renderAll() {
     if (!state.result) return;
-    state.monthFiltered = state.month
-      ? state.result.tickets.filter(function (t) { return WAParser.monthKey(t.requestedAt) === state.month; })
+    var pool = state.group
+      ? state.result.tickets.filter(function (t) { return t.grp === state.group; })
       : state.result.tickets;
+    state.monthFiltered = state.month
+      ? pool.filter(function (t) { return WAParser.monthKey(t.requestedAt) === state.month; })
+      : pool;
+    var scope = (state.group ? ' · ' + state.group : '') + (state.month ? ' · ' + monthLabel(state.month) : '');
     var s = WAParser.summarize(state.monthFiltered);
     s.windowHours = parseInt($('optWindow').value, 10);
-    renderKpis(s, state.month ? ' · ' + monthLabel(state.month) : '');
+    renderKpis(s, scope);
     renderTops(WAParser.topFrom(state.monthFiltered, 'requester', 10),
                WAParser.topFrom(state.monthFiltered, 'responder', 10));
     state.page = 0;
@@ -219,11 +274,16 @@
     var W = cv.width = Math.max(300, cv.parentElement.clientWidth), H = cv.height = 190;
     var padB = 24, padT = 20;
     ctx.clearRect(0, 0, W, H);
-    var msgs = state.messages.filter(function (m) { return !WAParser.isSystem(m); });
+    var msgs = state.messages.filter(function (m) {
+      return !WAParser.isSystem(m) && (!state.group || m.grp === state.group);
+    });
     if (!msgs.length) return;
+    var cticks = state.group
+      ? res.tickets.filter(function (t) { return t.grp === state.group; })
+      : res.tickets;
     var buckets = state.gran === 'month'
-      ? monthBuckets(msgs, res.tickets)
-      : weekBuckets(msgs, res.tickets);
+      ? monthBuckets(msgs, cticks)
+      : weekBuckets(msgs, cticks);
     state.chartBuckets = buckets;
     var max = 1;
     buckets.forEach(function (b) { max = Math.max(max, b.msgs); });
@@ -337,7 +397,7 @@
     state.filtered = base.filter(function (t) {
       if (st && t.status !== st) return false;
       if (cf && t.confidence !== cf && t.status !== 'pendiente') return false;
-      if (q && (t.code + ' ' + t.requester + ' ' + (t.responder || '')).toLowerCase().indexOf(q) === -1) return false;
+      if (q && (t.code + ' ' + (t.grp || '') + ' ' + t.requester + ' ' + (t.responder || '')).toLowerCase().indexOf(q) === -1) return false;
       return true;
     });
     renderTable();
@@ -356,7 +416,7 @@
     $('pgNext').disabled = (state.page + 1) * state.perPage >= state.filtered.length;
     tb.innerHTML = rows.map(function (t, i) {
       var idx = state.result.tickets.indexOf(t);
-      return '<tr><td><strong>' + esc(t.code) + '</strong></td><td>' + esc(t.requester) + '</td>' +
+      return '<tr><td><strong>' + esc(t.code) + '</strong></td><td>' + esc(t.grp || '—') + '</td><td>' + esc(t.requester) + '</td>' +
         '<td>' + esc(fmtDate(t.requestedAt)) + '</td><td>' + esc(t.responder || '—') + '</td>' +
         '<td>' + esc(fmtDur(t.minutesToResponse)) + '</td>' +
         '<td><span class="pill ' + (t.status === 'respondido' ? 'ok' : 'pend') + '">' + t.status + '</span></td>' +
@@ -370,7 +430,7 @@
 
   // ---------- detalle ----------
   function showDetail(t) {
-    $('dTitle').textContent = 'Ticket ' + t.code + ' · ' + t.status;
+    $('dTitle').textContent = 'Ticket ' + t.code + ' · ' + (t.grp || '') + ' · ' + t.status;
     var tl = timeline(t);
     $('dBody').innerHTML =
       '<p><strong>Solicita:</strong> ' + esc(t.requester) + ' · ' + esc(fmtDate(t.requestedAt)) + '</p>' +
@@ -394,6 +454,7 @@
     var out = [];
     state.messages.forEach(function (m) {
       if (WAParser.isSystem(m)) return;
+      if (t.grp && m.grp !== t.grp) return;
       if (WAParser.ticketsOf(m.body).indexOf(t.code) !== -1) out.push(m);
     });
     out.sort(function (a, b) { return a.dt - b.dt; });
@@ -415,16 +476,18 @@
   }
   $('btnCsv').addEventListener('click', function () {
     if (!state.result) return;
-    var head = 'codigo,solicitante,fecha_solicitud,respondedor,fecha_respuesta,minutos_respuesta,estado,confianza,menciones\n';
+    var head = 'codigo,grupo,solicitante,fecha_solicitud,respondedor,fecha_respuesta,minutos_respuesta,estado,confianza,menciones\n';
     var body = state.filtered.map(function (t) {
-      return [t.code, t.requester, fmtDate(t.requestedAt), t.responder || '', t.respondedAt ? fmtDate(t.respondedAt) : '',
+      return [t.code, t.grp || '', t.requester, fmtDate(t.requestedAt), t.responder || '', t.respondedAt ? fmtDate(t.respondedAt) : '',
         t.minutesToResponse == null ? '' : t.minutesToResponse, t.status, t.confidence || '', t.messageCount]
         .map(csvCell).join(',');
     }).join('\n');
-    download('tickets-whatsapp' + (state.month ? '-' + state.month : '') + '.csv', '﻿' + head + body, 'text/csv;charset=utf-8');
+    var tag = (state.group ? '-' + state.group : '') + (state.month ? '-' + state.month : '');
+    download('tickets-whatsapp' + tag + '.csv', '﻿' + head + body, 'text/csv;charset=utf-8');
   });
   $('btnJson').addEventListener('click', function () {
     if (!state.result) return;
-    download('tickets-whatsapp' + (state.month ? '-' + state.month : '') + '.json', JSON.stringify({ archivo: state.fileName, mes: state.month || 'todos', stats: WAParser.summarize(state.filtered), tickets: state.filtered }, null, 1), 'application/json');
+    var tag = (state.group ? '-' + state.group : '') + (state.month ? '-' + state.month : '');
+    download('tickets-whatsapp' + tag + '.json', JSON.stringify({ archivo: state.fileName, grupo: state.group || 'todos', mes: state.month || 'todos', mas1min: $('optPlusOne').checked, stats: WAParser.summarize(state.filtered), tickets: state.filtered }, null, 1), 'application/json');
   });
 })();

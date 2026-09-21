@@ -22,9 +22,9 @@
   <!-- Paso 1: carga -->
   <section id="dropZone" class="drop" tabindex="0" role="button" aria-label="Cargar archivo de chat">
     <div class="drop-icon">📄</div>
-    <p><strong>Arrastra el <code>.txt</code> exportado de WhatsApp</strong> o haz clic para elegirlo</p>
+    <p><strong>Arrastra uno o varios <code>.txt</code> exportados de WhatsApp</strong> (uno por grupo) o haz clic para elegirlos</p>
     <p class="hint">Grupo &gt; Nombre del grupo &gt; Exportar chat &gt; Sin archivos · Acepta exports en español</p>
-    <input id="fileInput" type="file" accept=".txt,text/plain" hidden>
+    <input id="fileInput" type="file" accept=".txt,text/plain" multiple hidden>
     <div id="loadProgress" class="progress" hidden><div class="bar"></div><span>Cargando…</span></div>
   </section>
 
@@ -50,6 +50,12 @@
           <option value="">Todos</option>
         </select>
       </label>
+      <label>Grupo
+        <select id="fGroup">
+          <option value="">Todos</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="optPlusOne" checked> Sumar +1 min a todos los tiempos</label>
       <button id="btnRoster" class="btn ghost" type="button">Equipo de soporte (<span id="rosterCount">0</span>)</button>
       <button id="btnCsv" class="btn" type="button">Exportar CSV</button>
       <button id="btnJson" class="btn ghost" type="button">Exportar JSON</button>
@@ -105,7 +111,7 @@
       </div>
       <div class="table-wrap"><table>
         <thead><tr>
-          <th>Código</th><th>Solicita</th><th>Fecha solicitud</th><th>Responde</th>
+          <th>Código</th><th>Grupo</th><th>Solicita</th><th>Fecha solicitud</th><th>Responde</th>
           <th>Tiempo resp.</th><th>Estado</th><th>Conf.</th><th></th>
         </tr></thead>
         <tbody id="tblBody"></tbody>
@@ -130,7 +136,8 @@
 
 <footer class="muted small">
   Ticket = 8–9 dígitos que empiezan con 15 o 16 (normaliza 00 y GTM-). Respuesta = primer mensaje de otro autor dentro de la ventana que repite el código o parece confirmación/gestión. Revisa la columna Conf.
-  Tiempos aproximados (±1 min): el export solo trae hora y minuto, sin segundos.
+  Puedes cargar varios .txt (uno por grupo): cada grupo se analiza por separado y puedes filtrar por grupo.
+  Tiempos aproximados (±1 min): el export solo trae hora y minuto, sin segundos. La casilla +1 min suma un minuto a todos los tiempos (criterio de exploración).
 </footer>
 
 <script src="parser.js"></script>
