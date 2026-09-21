@@ -237,8 +237,7 @@
     var s = WAParser.summarize(state.monthFiltered);
     s.windowHours = parseInt($('optWindow').value, 10);
     renderKpis(s, scope);
-    renderTops(WAParser.topFrom(state.monthFiltered, 'requester', 10),
-               WAParser.topFrom(state.monthFiltered, 'responder', 10));
+    renderTops(WAParser.statsBy(state.monthFiltered, 10));
     state.page = 0;
     applyFilters();
     renderChart();
@@ -281,13 +280,15 @@
     }
   }
 
-  function renderTops(topReq, topResp) {
-    $('topReq').innerHTML = topReq.map(function (r) {
-      return '<li>' + esc(r.name) + ' <span>(' + r.count + ' tickets)</span></li>';
-    }).join('') || '<li class="muted">Sin datos</li>';
-    $('topResp').innerHTML = topResp.map(function (r) {
-      return '<li>' + esc(r.name) + ' <span>(' + r.count + ' respuestas)</span></li>';
-    }).join('') || '<li class="muted">Sin datos</li>';
+  function renderTops(sb) {
+    $('topReq').innerHTML = sb.requesters.map(function (r, i) {
+      return '<tr><td>' + (i + 1) + '</td><td>' + esc(r.name) + '</td><td>' + r.count + '</td>' +
+        '<td>' + esc(fmtDur(r.avg)) + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="muted">Sin datos</td></tr>';
+    $('topResp').innerHTML = sb.responders.map(function (r, i) {
+      return '<tr><td>' + (i + 1) + '</td><td>' + esc(r.name) + '</td><td>' + r.count + '</td>' +
+        '<td>' + esc(fmtDur(r.avg)) + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="muted">Sin datos</td></tr>';
   }
 
   function renderChart() {

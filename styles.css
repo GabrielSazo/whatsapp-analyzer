@@ -44,6 +44,10 @@ canvas#chart{width:100%;display:block;cursor:crosshair}
 .tip{position:absolute;background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;pointer-events:none;z-index:5;box-shadow:0 4px 16px rgba(0,0,0,.5);white-space:nowrap}
 .tip b{color:#fff}
 .toplist{margin:0;padding-left:22px}
+table.mini{font-size:13.5px}
+table.mini td,table.mini th{white-space:normal}
+.table-wrap.flat{max-height:none;border:0}
+.table-wrap.flat thead th{position:static}
 .toplist li{margin:3px 0;font-size:14px}
 .toplist span{color:var(--mut)}
 .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}

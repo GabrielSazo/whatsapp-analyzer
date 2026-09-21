@@ -296,6 +296,29 @@
       .sort(function (a, b) { return b.count - a.count; }).slice(0, n || 10);
   }
 
+  /** Tablas por persona: solicitantes (tickets + espera media) y respondedores (respuestas + tiempo medio). */
+  function statsBy(tickets, n) {
+    var req = {}, resp = {};
+    tickets.forEach(function (t) {
+      var r = req[t.requester] = req[t.requester] || { name: t.requester, count: 0, sum: 0, timed: 0 };
+      r.count++;
+      if (t.minutesToResponse != null) { r.sum += t.minutesToResponse; r.timed++; }
+      if (t.responder) {
+        var s = resp[t.responder] = resp[t.responder] || { name: t.responder, count: 0, sum: 0, timed: 0 };
+        s.count++;
+        if (t.minutesToResponse != null) { s.sum += t.minutesToResponse; s.timed++; }
+      }
+    });
+    function list(obj) {
+      return Object.keys(obj).map(function (k) {
+        var o = obj[k];
+        return { name: o.name, count: o.count,
+          avg: o.timed ? Math.round((o.sum / o.timed) * 10) / 10 : null };
+      }).sort(function (a, b) { return b.count - a.count; }).slice(0, n || 10);
+    }
+    return { requesters: list(req), responders: list(resp) };
+  }
+
   /** Clave YYYY-MM de una fecha (para filtro/agrupación mensual). */
   function monthKey(d) {
     d = d instanceof Date ? d : new Date(d);
@@ -307,6 +330,7 @@
     ticketsOf: ticketsOf,
     analyze: analyze,
     summarize: summarize,
+    statsBy: statsBy,
     rangeOf: rangeOf,
     RANGE_LABELS: RANGE_LABELS,
     topFrom: topFrom,
