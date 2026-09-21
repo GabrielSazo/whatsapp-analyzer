@@ -120,17 +120,19 @@
     var chat = messages.filter(function (m) { return !isSystem(m); });
     var firstByTicket = {}; // code -> {idx, msg}
     var mentions = {};      // code -> count
+    var byTicket = {};      // code -> [{i, author}] índice para reaperturas
     chat.forEach(function (m, i) {
       var ts = ticketsOf(m.body);
       ts.forEach(function (t) {
         mentions[t] = (mentions[t] || 0) + 1;
         if (!firstByTicket[t]) firstByTicket[t] = { idx: i, msg: m };
+        (byTicket[t] = byTicket[t] || []).push({ i: i, author: m.author });
       });
     });
 
     var tickets = Object.keys(firstByTicket).map(function (code) {
       var f = firstByTicket[code];
-      var found = null;
+      var found = null, foundIdx = -1;
       for (var j = f.idx + 1; j < chat.length; j++) {
         var m = chat[j];
         if (m.dt - f.msg.dt > windowMs) break;
@@ -146,6 +148,7 @@
           continue;
         }
         found = { msg: m, confidence: ri.confidence };
+        foundIdx = j;
         break;
       }
       var minutes = found ? Math.round(((found.msg.dt - f.msg.dt) / 60000) * 10) / 10 : null;
@@ -155,6 +158,19 @@
       if (minutes === 0) minutes = 0.5;
       // Criterio opcional de exploración: sumar 1 min a todos los tiempos.
       if (minutes != null && options.plusOne) minutes = Math.round((minutes + 1) * 10) / 10;
+      // Reapertura: el mismo código vuelve a mencionarse DESPUÉS de la primera
+      // respuesta, por alguien distinto al respondedor (nueva solicitud/seguimiento).
+      // Usa el índice de menciones: O(menciones del ticket), no escanea todo el chat.
+      var reopened = null, reopenCount = 0;
+      if (found) {
+        var evs = byTicket[code] || [];
+        for (var k = 0; k < evs.length; k++) {
+          if (evs[k].i <= foundIdx) continue;
+          if (evs[k].author === found.msg.author) continue;
+          reopenCount++;
+          if (!reopened) reopened = { msg: chat[evs[k].i] };
+        }
+      }
       return {
         code: code,
         requester: f.msg.author,
@@ -166,7 +182,12 @@
         minutesToResponse: minutes,
         messageCount: mentions[code] || 0,
         status: found ? 'respondido' : 'pendiente',
-        confidence: found ? found.confidence : null
+        confidence: found ? found.confidence : null,
+        reopened: !!reopened,
+        reopenedBy: reopened ? reopened.msg.author : null,
+        reopenedAt: reopened ? reopened.msg.dt : null,
+        reopenedText: reopened ? reopened.msg.body.split('\n')[0].slice(0, 280) : null,
+        reopenCount: reopenCount
       };
     });
 
@@ -229,6 +250,17 @@
     return score.slice(0, limit || 10);
   }
 
+  /** Rango de tiempo de respuesta: '0-3' | '3-6' | '6-10' | '+10' | null (pendiente). */
+  function rangeOf(min) {
+    if (min == null) return null;
+    if (min < 3) return '0-3';
+    if (min < 6) return '3-6';
+    if (min < 10) return '6-10';
+    return '+10';
+  }
+
+  var RANGE_LABELS = { '0-3': '0–3 min', '3-6': '3–6 min', '6-10': '6–10 min', '+10': '+10 min' };
+
   /** Resume un subconjunto de tickets (ej. filtrado por mes) con las mismas métricas. */
   function summarize(tickets) {
     var responded = tickets.filter(function (t) { return t.status === 'respondido'; });
@@ -238,14 +270,19 @@
       return diffs[Math.min(diffs.length - 1, Math.floor(q * diffs.length))];
     }
     var avg = diffs.length ? diffs.reduce(function (a, b) { return a + b; }, 0) / diffs.length : null;
+    var reopenedCount = tickets.filter(function (t) { return t.reopened; }).length;
+    var ranges = { '0-3': 0, '3-6': 0, '6-10': 0, '+10': 0 };
+    responded.forEach(function (t) { ranges[rangeOf(t.minutesToResponse)]++; });
     return {
       total: tickets.length,
       responded: responded.length,
       pending: tickets.length - responded.length,
+      reopened: reopenedCount,
       responseRate: tickets.length ? Math.round((responded.length / tickets.length) * 1000) / 10 : 0,
       avgMinutes: avg != null ? Math.round(avg * 10) / 10 : null,
       medianMinutes: pct(0.5),
-      p90Minutes: pct(0.9)
+      p90Minutes: pct(0.9),
+      ranges: ranges
     };
   }
 
@@ -270,6 +307,8 @@
     ticketsOf: ticketsOf,
     analyze: analyze,
     summarize: summarize,
+    rangeOf: rangeOf,
+    RANGE_LABELS: RANGE_LABELS,
     topFrom: topFrom,
     monthKey: monthKey,
     suggestSupport: suggestSupport,

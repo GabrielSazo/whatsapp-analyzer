@@ -102,6 +102,14 @@
           <option value="">Todos</option>
           <option value="respondido">Respondidos</option>
           <option value="pendiente">Pendientes</option>
+          <option value="reabierto">Reabiertos</option>
+        </select>
+        <select id="fRange">
+          <option value="">Todo tiempo</option>
+          <option value="0-3">0–3 min</option>
+          <option value="3-6">3–6 min</option>
+          <option value="6-10">6–10 min</option>
+          <option value="+10">+10 min</option>
         </select>
         <select id="fConf">
           <option value="">Toda confianza</option>
@@ -109,6 +117,7 @@
           <option value="media">Confianza media</option>
         </select>
       </div>
+      <div id="distRanges" class="dist" title="Clic en un rango para filtrar la tabla"></div>
       <div class="table-wrap"><table>
         <thead><tr>
           <th>Código</th><th>Grupo</th><th>Solicita</th><th>Fecha solicitud</th><th>Responde</th>

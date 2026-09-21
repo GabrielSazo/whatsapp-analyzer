@@ -242,6 +242,28 @@
     state.page = 0;
     applyFilters();
     renderChart();
+    renderDist();
+  }
+
+  function renderDist() {
+    var s = WAParser.summarize(state.monthFiltered);
+    var tot = s.responded || 1;
+    var box = $('distRanges');
+    box.innerHTML = ['0-3', '3-6', '6-10', '+10'].map(function (r) {
+      var c = s.ranges[r];
+      var pct = Math.round((c / tot) * 100);
+      return '<div class="seg' + ($('fRange').value === r ? ' active' : '') + '" data-r="' + r + '">' +
+        '<b>' + c.toLocaleString('es-GT') + '</b><span>' + WAParser.RANGE_LABELS[r] + ' · ' + pct + '%</span></div>';
+    }).join('');
+    box.querySelectorAll('.seg').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var r = el.dataset.r;
+        $('fRange').value = ($('fRange').value === r) ? '' : r;
+        state.page = 0;
+        applyFilters();
+        renderDist();
+      });
+    });
   }
 
   function renderKpis(s, suffix) {
@@ -250,6 +272,7 @@
       kpi(s.total.toLocaleString('es-GT'), 'tickets con código' + suffix, '', 'Total de códigos distintos detectados en el período') +
       kpi(s.responded.toLocaleString('es-GT') + ' (' + s.responseRate + '%)', 'respondidos', 'good', 'Tickets con al menos una respuesta dentro de la ventana') +
       kpi(s.pending.toLocaleString('es-GT'), 'pendientes', s.pending ? 'bad' : '', 'Tickets sin respuesta dentro de la ventana: requieren seguimiento') +
+      kpi(s.reopened.toLocaleString('es-GT'), 'reabiertos', '', 'Respondidos que volvieron a moverse después: nueva solicitud o seguimiento') +
       kpi(fmtDur(s.medianMinutes), 'mediana 1ª respuesta', '', 'El 50% se respondió en este tiempo o menos: el caso típico') +
       kpi(fmtDur(s.p90Minutes), 'p90 1ª respuesta', 'warn', 'El 90% se respondió en este tiempo o menos: el grueso del servicio') +
       kpi(fmtDur(s.avgMinutes), 'promedio 1ª respuesta', '', 'Media aritmética: sube si hay casos extremos muy lentos');
@@ -381,7 +404,7 @@
   }
 
   // ---------- tabla ----------
-  ['fSearch', 'fStatus', 'fConf'].forEach(function (id) {
+  ['fSearch', 'fStatus', 'fRange', 'fConf'].forEach(function (id) {
     $(id).addEventListener('input', function () { state.page = 0; applyFilters(); });
     $(id).addEventListener('change', function () { state.page = 0; applyFilters(); });
   });
@@ -392,13 +415,18 @@
 
   function applyFilters() {
     var q = $('fSearch').value.trim().toLowerCase();
-    var st = $('fStatus').value, cf = $('fConf').value;
+    var st = $('fStatus').value, cf = $('fConf').value, rg = $('fRange').value;
     var base = state.monthFiltered;
     state.filtered = base.filter(function (t) {
-      if (st && t.status !== st) return false;
+      if (st === 'reabierto' ? !t.reopened : (st && t.status !== st)) return false;
+      if (rg && WAParser.rangeOf(t.minutesToResponse) !== rg) return false;
       if (cf && t.confidence !== cf && t.status !== 'pendiente') return false;
       if (q && (t.code + ' ' + (t.grp || '') + ' ' + t.requester + ' ' + (t.responder || '')).toLowerCase().indexOf(q) === -1) return false;
       return true;
+    });
+    var curRg = $('fRange').value;
+    document.querySelectorAll('#distRanges .seg').forEach(function (el) {
+      el.classList.toggle('active', el.dataset.r === curRg);
     });
     renderTable();
   }
@@ -419,7 +447,8 @@
       return '<tr><td><strong>' + esc(t.code) + '</strong></td><td>' + esc(t.grp || '—') + '</td><td>' + esc(t.requester) + '</td>' +
         '<td>' + esc(fmtDate(t.requestedAt)) + '</td><td>' + esc(t.responder || '—') + '</td>' +
         '<td>' + esc(fmtDur(t.minutesToResponse)) + '</td>' +
-        '<td><span class="pill ' + (t.status === 'respondido' ? 'ok' : 'pend') + '">' + t.status + '</span></td>' +
+        '<td><span class="pill ' + (t.status === 'respondido' ? 'ok' : 'pend') + '">' + t.status + '</span>' +
+        (t.reopened ? '<span class="pill warn" title="Volvió a moverse después de respondido">reabierto</span>' : '') + '</td>' +
         '<td class="conf">' + esc(t.confidence || '—') + '</td>' +
         '<td><button class="btn ghost" data-i="' + idx + '">Ver</button></td></tr>';
     }).join('');
@@ -440,6 +469,11 @@
           ' · <strong>' + esc(fmtDur(t.minutesToResponse)) + '</strong> después (confianza ' + esc(t.confidence) + ')</p>' +
           '<div class="tl-item"><div class="txt">' + esc(t.responseText || '') + '</div></div>'
         : '<p><strong>Sin respuesta</strong> dentro de la ventana de ' + esc($('optWindow').value) + ' h.</p>') +
+      (t.reopened
+        ? '<p><strong>↩ Reabierto:</strong> ' + esc(t.reopenedBy) + ' · ' + esc(fmtDate(t.reopenedAt)) +
+          (t.reopenCount > 1 ? ' · ' + t.reopenCount + ' menciones posteriores' : '') + '</p>' +
+          '<div class="tl-item"><div class="txt">' + esc(t.reopenedText || '') + '</div></div>'
+        : '') +
       '<h3>Línea de tiempo del ticket (' + tl.length + ' menciones)</h3><div class="tl">' +
       tl.map(function (m) {
         return '<div class="tl-item"><div class="who">' + esc(m.author) + '</div><div class="when">' +
@@ -476,10 +510,11 @@
   }
   $('btnCsv').addEventListener('click', function () {
     if (!state.result) return;
-    var head = 'codigo,grupo,solicitante,fecha_solicitud,respondedor,fecha_respuesta,minutos_respuesta,estado,confianza,menciones\n';
+    var head = 'codigo,grupo,solicitante,fecha_solicitud,respondedor,fecha_respuesta,minutos_respuesta,estado,confianza,menciones,reabierto,quien_reabre,fecha_reapertura\n';
     var body = state.filtered.map(function (t) {
       return [t.code, t.grp || '', t.requester, fmtDate(t.requestedAt), t.responder || '', t.respondedAt ? fmtDate(t.respondedAt) : '',
-        t.minutesToResponse == null ? '' : t.minutesToResponse, t.status, t.confidence || '', t.messageCount]
+        t.minutesToResponse == null ? '' : t.minutesToResponse, t.status, t.confidence || '', t.messageCount,
+        t.reopened ? 'si' : 'no', t.reopenedBy || '', t.reopenedAt ? fmtDate(t.reopenedAt) : '']
         .map(csvCell).join(',');
     }).join('\n');
     var tag = (state.group ? '-' + state.group : '') + (state.month ? '-' + state.month : '');
