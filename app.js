@@ -247,14 +247,14 @@
   function renderKpis(s, suffix) {
     var el = $('kpis');
     el.innerHTML =
-      kpi(s.total.toLocaleString('es-GT'), 'tickets con código' + suffix) +
-      kpi(s.responded.toLocaleString('es-GT') + ' (' + s.responseRate + '%)', 'respondidos', 'good') +
-      kpi(s.pending.toLocaleString('es-GT'), 'pendientes', s.pending ? 'bad' : '') +
-      kpi(fmtDur(s.medianMinutes), 'mediana 1ª respuesta') +
-      kpi(fmtDur(s.p90Minutes), 'p90 1ª respuesta', 'warn') +
-      kpi(fmtDur(s.avgMinutes), 'promedio 1ª respuesta');
-    function kpi(v, l, cls) {
-      return '<div class="kpi ' + (cls || '') + '"><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>';
+      kpi(s.total.toLocaleString('es-GT'), 'tickets con código' + suffix, '', 'Total de códigos distintos detectados en el período') +
+      kpi(s.responded.toLocaleString('es-GT') + ' (' + s.responseRate + '%)', 'respondidos', 'good', 'Tickets con al menos una respuesta dentro de la ventana') +
+      kpi(s.pending.toLocaleString('es-GT'), 'pendientes', s.pending ? 'bad' : '', 'Tickets sin respuesta dentro de la ventana: requieren seguimiento') +
+      kpi(fmtDur(s.medianMinutes), 'mediana 1ª respuesta', '', 'El 50% se respondió en este tiempo o menos: el caso típico') +
+      kpi(fmtDur(s.p90Minutes), 'p90 1ª respuesta', 'warn', 'El 90% se respondió en este tiempo o menos: el grueso del servicio') +
+      kpi(fmtDur(s.avgMinutes), 'promedio 1ª respuesta', '', 'Media aritmética: sube si hay casos extremos muy lentos');
+    function kpi(v, l, cls, tip) {
+      return '<div class="kpi ' + (cls || '') + '" title="' + esc(tip) + '"><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>';
     }
   }
 
