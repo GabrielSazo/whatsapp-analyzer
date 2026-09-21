@@ -21,7 +21,7 @@
   }
   function fmtDur(min) {
     if (min == null) return '—';
-    if (min < 1) return Math.round(min * 60) + ' s';
+    if (min < 1) return '< 1 min';
     if (min < 60) return (Math.round(min * 10) / 10) + ' min';
     var h = Math.floor(min / 60), m = Math.round(min % 60);
     if (h < 48) return h + ' h ' + m + ' min';
