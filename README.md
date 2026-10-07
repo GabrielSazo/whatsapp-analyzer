@@ -14,8 +14,34 @@ Todo se procesa **en tu navegador, 100% local**. El archivo nunca se sube a ning
    separado — las respuestas nunca cruzan de un grupo a otro — y puedes filtrar por grupo.
 4. Ajusta la **ventana de respuesta** (4h / 8h / 24h / 7d) y el filtro
    **Solo contar respuesta del equipo de soporte** + el roster sugerido.
-5. Filtra por estado/confianza/búsqueda, abre el **detalle** de cada ticket y
+5. Filtra por estado/confianza/rango/tipo/búsqueda, abre el **detalle** de cada ticket y
    **exporta CSV/JSON** para Excel o reportes.
+
+## Catálogo de tipos de solicitud
+
+Cada solicitud se clasifica por palabras clave del primer mensaje que menciona el código:
+
+| Tipo | Ejemplo |
+| ---- | ------- |
+| Activación CM / ATV | apoyo con activación de cm, error al activar ATV |
+| Código BBI/CM/CA inválido o actualizar | código de bbi da inválido, actualizar CA |
+| Baja MTA/EMTA | dar de baja al mta, botar MTA |
+| Baja otros equipos/servicios | dar de baja a zaper, retirar |
+| Activación MTA/EMTA | activación de mta, no sincroniza |
+| Telefonía sin tono / sin llamadas | no da tono, sin llamadas |
+| Plume / Extensor / WiFi | no ancla a plume, agregar extensor |
+| ONT / Navegación / Internet | ont no da navegación, sin internet |
+| Baja STB / caja (DTH) | baja a stb, dejar verimatrix |
+| DTH tecnología / STB / imagen | cambio de tecnología, sin imagen |
+| Morosa / Anexo / Regularizar | anexo, regularizar, grilla morosa |
+| Escala / cierre / anulación OT | escala de línea, anular OT |
+| Error sistema / plataforma | no aparece en intraway, ficha no anclada |
+| Cambio de equipo / serie | cambiar equipo, MAC, Kaon |
+| Solo código / seguimiento corto | solo el número, "de la orden" |
+| Otros / sin clasificar | resto (revisa el detalle) |
+
+La tabla del catálogo muestra conteo, % y tiempo promedio por tipo; clic en una fila
+filtra la tabla de tickets. Respeta los filtros de grupo y mes.
 
 ## Qué es un ticket
 
