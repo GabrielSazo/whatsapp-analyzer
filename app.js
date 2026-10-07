@@ -56,13 +56,13 @@
   });
 
   function shortName(name) {
-    var b = String(name).replace(/\.txt$/i, '').trim() || 'grupo';
+    var b = String(name).replace(/\.(txt|md)$/i, '').trim() || 'grupo';
     return b.length > 40 ? b.slice(0, 40) + '…' : b;
   }
 
   function loadFiles(files) {
-    files = files.filter(function (f) { return /\.txt$/i.test(f.name) || f.type === 'text/plain'; });
-    if (!files.length) { alert('Elige archivos .txt exportados de WhatsApp.'); return; }
+    files = files.filter(function (f) { return /\.(txt|md)$/i.test(f.name) || f.type === 'text/plain'; });
+    if (!files.length) { alert('Elige archivos .txt o .md exportados de WhatsApp.'); return; }
     $('loadProgress').hidden = false;
     var reads = files.map(function (f) {
       return new Promise(function (resolve, reject) {
