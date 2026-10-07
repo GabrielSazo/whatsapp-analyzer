@@ -46,6 +46,8 @@ canvas#chart{width:100%;display:block;cursor:crosshair}
 .toplist{margin:0;padding-left:22px}
 table.mini{font-size:13.5px}
 table.mini td,table.mini th{white-space:normal}
+table.mini tr.active td{background:#1e3a5f}
+#catBody tr:hover td{background:#223349}
 .table-wrap.flat{max-height:none;border:0}
 .table-wrap.flat thead th{position:static}
 .toplist li{margin:3px 0;font-size:14px}

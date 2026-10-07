@@ -199,6 +199,7 @@
     state.result = { tickets: merged };
     buildGroupOptions();
     buildMonthOptions();
+    buildTypeOptions();
     renderAll();
   }
 
@@ -209,6 +210,18 @@
       return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>';
     }).join('');
     if (cur && names.indexOf(cur) === -1) state.group = '';
+  }
+
+  function buildTypeOptions() {
+    var seen = {};
+    state.result.tickets.forEach(function (t) { seen[t.reqType] = 1; });
+    var keys = WAParser.catalog(state.result.tickets).map(function (c) { return c.key; });
+    var sel = $('fType'), cur = sel.value;
+    sel.innerHTML = '<option value="">Todo tipo</option>' + keys.map(function (k) {
+      var lab = (WAParser.CAT_LABEL && WAParser.CAT_LABEL[k]) || k;
+      return '<option value="' + esc(k) + '"' + (k === cur ? ' selected' : '') + '>' + esc(lab) + '</option>';
+    }).join('');
+    if (cur && !seen[cur]) sel.value = '';
   }
 
   function buildMonthOptions() {
@@ -242,6 +255,28 @@
     applyFilters();
     renderChart();
     renderDist();
+    renderCatalog();
+  }
+
+  function renderCatalog() {
+    var rows = WAParser.catalog(state.monthFiltered);
+    var cur = $('fType').value;
+    var tb = $('catBody');
+    tb.innerHTML = rows.map(function (r) {
+      return '<tr data-k="' + esc(r.key) + '" class="' + (cur === r.key ? 'active' : '') + '">' +
+        '<td>' + esc(r.label) + '</td><td>' + r.count.toLocaleString('es-GT') + '</td>' +
+        '<td>' + r.pct + '%</td><td>' + esc(fmtDur(r.avg)) + '</td><td>' + r.pending.toLocaleString('es-GT') + '</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="muted">Sin datos</td></tr>';
+    tb.querySelectorAll('tr[data-k]').forEach(function (tr) {
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', function () {
+        var k = tr.dataset.k;
+        $('fType').value = ($('fType').value === k) ? '' : k;
+        state.page = 0;
+        applyFilters();
+        renderCatalog();
+      });
+    });
   }
 
   function renderDist() {
@@ -405,7 +440,7 @@
   }
 
   // ---------- tabla ----------
-  ['fSearch', 'fStatus', 'fRange', 'fConf'].forEach(function (id) {
+  ['fSearch', 'fStatus', 'fRange', 'fType', 'fConf'].forEach(function (id) {
     $(id).addEventListener('input', function () { state.page = 0; applyFilters(); });
     $(id).addEventListener('change', function () { state.page = 0; applyFilters(); });
   });
@@ -416,18 +451,23 @@
 
   function applyFilters() {
     var q = $('fSearch').value.trim().toLowerCase();
-    var st = $('fStatus').value, cf = $('fConf').value, rg = $('fRange').value;
+    var st = $('fStatus').value, cf = $('fConf').value, rg = $('fRange').value, ty = $('fType').value;
     var base = state.monthFiltered;
     state.filtered = base.filter(function (t) {
       if (st === 'reabierto' ? !t.reopened : (st && t.status !== st)) return false;
       if (rg && WAParser.rangeOf(t.minutesToResponse) !== rg) return false;
+      if (ty && t.reqType !== ty) return false;
       if (cf && t.confidence !== cf && t.status !== 'pendiente') return false;
-      if (q && (t.code + ' ' + (t.grp || '') + ' ' + t.requester + ' ' + (t.responder || '')).toLowerCase().indexOf(q) === -1) return false;
+      if (q && (t.code + ' ' + (t.grp || '') + ' ' + t.requester + ' ' + (t.responder || '') + ' ' + (t.reqTypeLabel || '')).toLowerCase().indexOf(q) === -1) return false;
       return true;
     });
     var curRg = $('fRange').value;
     document.querySelectorAll('#distRanges .seg').forEach(function (el) {
       el.classList.toggle('active', el.dataset.r === curRg);
+    });
+    var curTy = $('fType').value;
+    document.querySelectorAll('#catBody tr[data-k]').forEach(function (el) {
+      el.classList.toggle('active', el.dataset.k === curTy);
     });
     renderTable();
   }
@@ -464,6 +504,7 @@
     var tl = timeline(t);
     $('dBody').innerHTML =
       '<p><strong>Solicita:</strong> ' + esc(t.requester) + ' · ' + esc(fmtDate(t.requestedAt)) + '</p>' +
+      '<p><strong>Tipo:</strong> ' + esc(t.reqTypeLabel || t.reqType || '—') + '</p>' +
       '<p><strong>Solicitud:</strong></p><div class="tl-item"><div class="txt">' + esc(t.requestText) + '</div></div>' +
       (t.responder
         ? '<p><strong>Primera respuesta:</strong> ' + esc(t.responder) + ' · ' + esc(fmtDate(t.respondedAt)) +
@@ -511,9 +552,9 @@
   }
   $('btnCsv').addEventListener('click', function () {
     if (!state.result) return;
-    var head = 'codigo,grupo,solicitante,fecha_solicitud,respondedor,fecha_respuesta,minutos_respuesta,estado,confianza,menciones,reabierto,quien_reabre,fecha_reapertura\n';
+    var head = 'codigo,grupo,tipo_solicitud,solicitante,fecha_solicitud,respondedor,fecha_respuesta,minutos_respuesta,estado,confianza,menciones,reabierto,quien_reabre,fecha_reapertura\n';
     var body = state.filtered.map(function (t) {
-      return [t.code, t.grp || '', t.requester, fmtDate(t.requestedAt), t.responder || '', t.respondedAt ? fmtDate(t.respondedAt) : '',
+      return [t.code, t.grp || '', t.reqTypeLabel || t.reqType || '', t.requester, fmtDate(t.requestedAt), t.responder || '', t.respondedAt ? fmtDate(t.respondedAt) : '',
         t.minutesToResponse == null ? '' : t.minutesToResponse, t.status, t.confidence || '', t.messageCount,
         t.reopened ? 'si' : 'no', t.reopenedBy || '', t.reopenedAt ? fmtDate(t.reopenedAt) : '']
         .map(csvCell).join(',');

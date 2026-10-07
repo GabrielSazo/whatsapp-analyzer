@@ -171,11 +171,14 @@
           if (!reopened) reopened = { msg: chat[evs[k].i] };
         }
       }
+      var reqType = classifyRequest(f.msg.body);
       return {
         code: code,
         requester: f.msg.author,
         requestedAt: f.msg.dt,
         requestText: f.msg.body.slice(0, 280),
+        reqType: reqType,
+        reqTypeLabel: CAT_LABEL[reqType] || reqType,
         responder: found ? found.msg.author : null,
         respondedAt: found ? found.msg.dt : null,
         responseText: found ? found.msg.body.split('\n')[0].slice(0, 280) : null,
@@ -319,6 +322,98 @@
     return { requesters: list(req), responders: list(resp) };
   }
 
+  /** Normaliza para clasificar: minusculas, sin tildes ni ruido de encoding. */
+  function normClassify(s) {
+    return String(s == null ? '' : s).toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  // Catálogo de tipos de solicitud (orden = prioridad de clasificación).
+  // 'solo_codigo' y 'mta_present' se evalúan con reglas propias, no con regex.
+  var CATALOG = [
+    { key: 'baja_mta', label: 'Baja MTA/EMTA',
+      pats: ['\\bbaja\\b.*\\b(mta|emta)\\b', '\\b(mta|emta)\\b.*\\bbaja\\b', '\\bbot\\w*\\b.*\\bmta\\b', '\\bmta\\b.*\\bbot\\w*\\b', '\\bretirar\\b.*\\b(mta|emta|grilla)\\b'] },
+    { key: 'dth_baja', label: 'Baja STB / caja (DTH)',
+      pats: ['\\bbaja\\b.*\\b(stb|caja|cajas|cajita)\\b', '\\b(stb|caja)\\b.*\\bbaja\\b'] },
+    { key: 'baja_otros', label: 'Baja otros equipos/servicios',
+      pats: ['\\bbaja\\b', '\\bbot\\w*\\b', '\\bretirar\\b', '\\bdar\\b.*\\bbaja\\b'] },
+    { key: 'activacion_cm_atv', label: 'Activación CM / ATV',
+      pats: ['\\batv\\b', '\\bcm\\b.*\\bactiv', '\\bactiv.*\\bcm\\b', '\\bconfigurar\\b.*\\bcm\\b', '\\bcm\\b.*\\bconfigurar\\b', '\\barris\\b', '\\bapagar\\b.*\\bantena\\b', '\\bactivacion\\b.*\\bmanual\\b', '\\bactiv\\w*\\b'] },
+    { key: 'codigo_invalido', label: 'Código BBI/CM/CA inválido o actualizar',
+      pats: ['invalido', '\\binval\\b', 'sincroniz', 'actualiz.*\\b(cod|codigo|cdigo|ca|cm|bbi|cs|cas|caja|cajas)\\b', '\\b(cod|codigo|cdigo|ca|cm|bbi|cs|caja)\\b.*actualiz', '\\bcodigo\\b|\\bcdigo\\b|\\bcodigos\\b|\\bcods\\b|\\bcod\\b', '\\bca\\b.*\\b(actualizad|nuevo|da|dice)\\b', '\\bdame\\b.*\\bca\\b', '\\bca\\b.*\\bcm\\b', '\\bcm\\b.*\\bca\\b', '\\bcm\\b.*\\bda\\b', '\\bda\\b.*\\binval', '\\bbi\\b.*\\b(codigo|cdigo|cod)\\b', '\\b(codigo|cdigo|cod)\\b.*\\bbi\\b'] },
+    { key: 'telefonia', label: 'Telefonía sin tono / sin llamadas',
+      pats: ['telefonia', 'sin tono', 'no.*tono', 'sin.*llamadas', 'llamadas', '\\btono\\b.*\\bocupado\\b', 'no.*saca.*llamadas'] },
+    { key: 'plume_extensor', label: 'Plume / Extensor / WiFi',
+      pats: ['plume', 'extensor', '\\bext\\b', 'ancla', '\\bwifi\\b', 'no.*agregar.*equipo'] },
+    { key: 'ont_navegacion', label: 'ONT / Navegación / Internet',
+      pats: ['\\bont\\b', 'navegacion', '\\binternet\\b', '\\bwifi\\b', 'no.*navega', 'sin.*internet', 'senal', 'no.*da.*navegacion', '\\bred\\b', '\\bniveles\\b'] },
+    { key: 'dth_tecnologia', label: 'DTH tecnología / STB / imagen',
+      pats: ['verimatrix', 'conax', 'cambio.*tecnologia', 'tecnologia', '\\binit\\b', 'terminacion', '\\bstb\\b', '\\bcaja', 'android', 'imagen', 'canales'] },
+    { key: 'morosa_anexo', label: 'Morosa / Anexo / Regularizar',
+      pats: ['morosa', 'anexo', 'regularizar', 'grilla'] },
+    { key: 'escala_cierre', label: 'Escala / cierre / anulación OT',
+      pats: ['\\bescala\\b', '\\bcerrar\\b', '\\bcierre\\b', 'anula', 'reingreso', 'suspend'] },
+    { key: 'error_sistema', label: 'Error sistema / plataforma',
+      pats: ['intraway', 'as400', '\\biw\\b', '\\bamsys\\b', 'ficha', 'no aparece', 'no.*anclada', 'error al', '\\berror\\b', 'no deja', 'no permite', 'no.*vincular', '\\bremover\\b'] },
+    { key: 'cambio_equipo', label: 'Cambio de equipo / serie',
+      pats: ['cambio.*equipo', 'cambiar.*equipo', '\\bmac\\b', '\\bserial\\b', '\\bkaon\\b', 'se.*cambio.*equipo'] }
+  ];
+  var CAT_LABEL = { 'solo_codigo': 'Solo código / seguimiento corto', 'otros': 'Otros / sin clasificar' };
+  CATALOG.forEach(function (c) { CAT_LABEL[c.key] = c.label; });
+  var CAT_RES = CATALOG.map(function (c) {
+    return { key: c.key, res: c.pats.map(function (p) { return new RegExp(p); }) };
+  });
+
+  /**
+   * Clasifica el texto de la solicitud en un tipo del catálogo.
+   * Devuelve la clave (ej. 'baja_mta'). Etiqueta vía CAT_LABEL[clave].
+   */
+  function testCat(i, t2) {
+    var pats = CAT_RES[i].res;
+    for (var j = 0; j < pats.length; j++) {
+      if (pats[j].test(t2)) return true;
+    }
+    return false;
+  }
+  function classifyRequest(body) {
+    var t = normClassify(body);
+    var t2 = t.replace(/(?:gtm )?0*1[56]\d{6,7}/gi, 'NUM');
+    var stripped = t2.replace(/NUM/g, '').trim();
+    if (stripped.length < 12) return 'solo_codigo';
+    var i;
+    for (i = 0; i < 3; i++) {
+      if (testCat(i, t2)) return CAT_RES[i].key;
+    }
+    // Toda mención de MTA/EMTA sin baja es gestión/activación de MTA.
+    if (/\b(mta|emta)\b/.test(t2)) return 'activacion_mta';
+    for (i = 3; i < CAT_RES.length; i++) {
+      if (testCat(i, t2)) return CAT_RES[i].key;
+    }
+    return 'otros';
+  }
+
+  /** Agrega tickets por tipo de solicitud: conteo, %, tiempos, pendientes. */
+  function catalog(tickets) {
+    var map = {};
+    tickets.forEach(function (t) {
+      var k = t.reqType || 'otros';
+      var e = map[k] = map[k] || { key: k, count: 0, sum: 0, timed: 0, pending: 0, reopened: 0 };
+      e.count++;
+      if (t.minutesToResponse != null) { e.sum += t.minutesToResponse; e.timed++; }
+      if (t.status === 'pendiente') e.pending++;
+      if (t.reopened) e.reopened++;
+    });
+    var total = tickets.length || 1;
+    return Object.keys(map).map(function (k) {
+      var e = map[k];
+      return { key: k, label: CAT_LABEL[k] || k, count: e.count,
+        pct: Math.round((e.count / total) * 1000) / 10,
+        avg: e.timed ? Math.round((e.sum / e.timed) * 10) / 10 : null,
+        pending: e.pending, reopened: e.reopened };
+    }).sort(function (a, b) { return b.count - a.count; });
+  }
+
   /** Clave YYYY-MM de una fecha (para filtro/agrupación mensual). */
   function monthKey(d) {
     d = d instanceof Date ? d : new Date(d);
@@ -333,6 +428,9 @@
     statsBy: statsBy,
     rangeOf: rangeOf,
     RANGE_LABELS: RANGE_LABELS,
+    classifyRequest: classifyRequest,
+    catalog: catalog,
+    CAT_LABEL: CAT_LABEL,
     topFrom: topFrom,
     monthKey: monthKey,
     suggestSupport: suggestSupport,

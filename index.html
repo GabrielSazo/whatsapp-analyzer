@@ -101,6 +101,15 @@
     </div>
 
     <div class="card">
+      <h2>Catálogo de solicitudes</h2>
+      <p class="muted small">Tipo detectado automáticamente del texto de cada solicitud. Clic en una fila para filtrar la tabla de tickets.</p>
+      <div class="table-wrap flat"><table class="mini">
+        <thead><tr><th>Tipo de solicitud</th><th>Tickets</th><th>%</th><th>Tpo. prom.</th><th>Pend.</th></tr></thead>
+        <tbody id="catBody"></tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
       <h2>Tickets <span id="tblCount" class="muted"></span></h2>
       <div class="filters">
         <input id="fSearch" type="search" placeholder="Buscar código, solicitante o respondedor…">
@@ -116,6 +125,9 @@
           <option value="3-6">3–6 min</option>
           <option value="6-10">6–10 min</option>
           <option value="+10">+10 min</option>
+        </select>
+        <select id="fType">
+          <option value="">Todo tipo</option>
         </select>
         <select id="fConf">
           <option value="">Toda confianza</option>
@@ -153,6 +165,7 @@
   Ticket = 8–9 dígitos que empiezan con 15 o 16 (normaliza 00 y GTM-). Respuesta = primer mensaje de otro autor dentro de la ventana que repite el código o parece confirmación/gestión. Revisa la columna Conf.
   Puedes cargar varios .txt (uno por grupo): cada grupo se analiza por separado y puedes filtrar por grupo.
   Tiempos aproximados (±1 min): el export solo trae hora y minuto, sin segundos. La casilla +1 min suma un minuto a todos los tiempos (criterio de exploración).
+  Catálogo: cada solicitud se clasifica por palabras clave (bajas, activaciones, códigos, telefonía, Plume, DTH, etc.); revisa el tipo en el detalle si dudas.
 </footer>
 
 <script src="parser.js"></script>
