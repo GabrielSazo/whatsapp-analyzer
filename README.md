@@ -8,7 +8,8 @@ Todo se procesa **en tu navegador, 100% local**. El archivo nunca se sube a ning
 
 ## Uso
 
-1. En WhatsApp: Grupo → Nombre del grupo → **Exportar chat → Sin archivos** → obtienes un `.txt`.
+1. En WhatsApp: Grupo → **Exportar chat → Sin archivos** → obtienes un `.txt` (Android o iPhone sirven).
+   También acepta el export en Markdown (`.md`): las citas `>` se excluyen del análisis.
 2. Abre la app publicada en GitHub Pages (ver despliegue abajo) o `index.html` en local.
 3. Arrastra uno o varios `.txt` (uno por grupo de WhatsApp). Cada grupo se analiza por
    separado — las respuestas nunca cruzan de un grupo a otro — y puedes filtrar por grupo.

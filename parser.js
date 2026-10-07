@@ -38,8 +38,107 @@
     return new Date(parseInt(yyyy, 10), parseInt(mm, 10) - 1, parseInt(dd, 10), h, parseInt(mi, 10), 0);
   }
 
-  /** Convierte el texto del .txt en lista de {dt, author|null, body}. Une líneas continuación. */
+  /** Convierte el texto del export en lista de {dt, author|null, body}. Une líneas continuación. */
   function parseChat(text) {
+    var t = String(text);
+    if (isMarkdownExport(t)) return parseMarkdown(t);
+    if (isIPhoneExport(t)) return parseIPhone(t);
+    return parseAndroid(t);
+  }
+
+  // Export Markdown: "# ..." + "## 18 de junio de 2026" + "[6:28 p. m.] **Autor:** texto" + "> _cita_"
+  function isMarkdownExport(t) {
+    return /^##\s+\d{1,2}\s+de\s+\S+\s+de\s+\d{4}/mi.test(t) &&
+      /\[\d{1,2}:\d{2}\s*[ap]\.\s*m\.\]\s+\*\*/i.test(t);
+  }
+
+  // Export iPhone: "[6/18/26, 6:28:14 PM] Autor: texto"
+  function isIPhoneExport(t) {
+    return /^\[\d{1,2}\/\d{1,2}\/\d{2,4},/m.test(t);
+  }
+
+  var MD_DAY_RE = /^##\s+(\d{1,2})\s+de\s+([a-z]+)\s+de\s+(\d{4})\s*$/i;
+  var MD_MSG_RE = /^\[(\d{1,2}):(\d{2})\s*([ap])\.\s*m\.\]\s+\*\*(.+?)\*\*:?\s*([\s\S]*)$/i;
+  var MD_MONTHS = { enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+    julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9, noviembre: 10, diciembre: 11 };
+
+  /** Export Markdown: fecha en encabezados ##, citas ">" excluidas del cuerpo. */
+  function parseMarkdown(text) {
+    var lines = String(text).split(/\r?\n/);
+    var msgs = [];
+    var cur = null, day = null;
+    function flush() { if (cur) msgs.push(cur); cur = null; }
+    for (var i = 0; i < lines.length; i++) {
+      var line = normalizeSpaces(lines[i]);
+      if (!line.trim() || line.trim() === '---') continue;
+      var dh = line.match(MD_DAY_RE);
+      if (dh) {
+        var mi = MD_MONTHS[dh[2].toLowerCase()];
+        if (mi != null) day = { d: parseInt(dh[1], 10), m: mi, y: parseInt(dh[3], 10) };
+        continue;
+      }
+      if (/^#\s/.test(line) || /^fecha de exportaci.n/i.test(line)) continue;
+      var m = line.match(MD_MSG_RE);
+      if (m && day) {
+        flush();
+        var author = m[4].trim().replace(/:\s*$/, '');
+        cur = { dt: parseDate12(day.d, day.m, day.y, m[1], m[2], m[3]),
+          author: author || null, body: m[5].trim(), quote: [] };
+        continue;
+      }
+      if (cur && /^>\s?([\s\S]*)$/.test(line)) {
+        var q = line.replace(/^>\s?/, '').replace(/^_(.*)_$/, '$1').trim();
+        if (q) cur.quote.push(q);
+        continue;
+      }
+      if (cur) cur.body += (cur.body ? '\n' : '') + line.trim();
+    }
+    flush();
+    msgs.sort(function (a, b) { return a.dt - b.dt; });
+    return msgs;
+  }
+
+  function parseDate12(dd, mm0, yyyy, hh, mi, ap) {
+    var h = parseInt(hh, 10);
+    var pm = String(ap).toLowerCase() === 'p';
+    if (pm && h !== 12) h += 12;
+    if (!pm && h === 12) h = 0;
+    return new Date(parseInt(yyyy, 10), mm0, parseInt(dd, 10), h, parseInt(mi, 10), 0);
+  }
+
+  var IPHONE_RE = /^\[(\d{1,2})\/(\d{1,2})\/(\d{2,4}),\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP])\.?\s*M\.?\]\s+([\s\S]*)$/i;
+
+  /** Export iPhone: "[M/D/AA, H:MM:SS AM] Autor: texto". */
+  function parseIPhone(text) {
+    var lines = String(text).split(/\r?\n/);
+    var msgs = [];
+    var cur = null;
+    for (var i = 0; i < lines.length; i++) {
+      var line = normalizeSpaces(lines[i]);
+      if (!line.trim()) continue;
+      var m = line.match(IPHONE_RE);
+      if (m) {
+        if (cur) msgs.push(cur);
+        var yy = parseInt(m[3], 10);
+        var yyyy = m[3].length === 2 ? (yy < 50 ? 2000 + yy : 1900 + yy) : yy;
+        var rest = m[8];
+        var ci = rest.indexOf(':');
+        var author, body;
+        if (ci === -1) { author = null; body = rest.trim(); }
+        else { author = rest.slice(0, ci).trim(); body = rest.slice(ci + 1).trim(); }
+        cur = { dt: parseDate12(parseInt(m[2], 10), parseInt(m[1], 10) - 1, yyyy, m[4], m[5], m[7]),
+          author: author || null, body: body };
+      } else if (cur) {
+        cur.body += '\n' + line.trim();
+      }
+    }
+    if (cur) msgs.push(cur);
+    msgs.sort(function (a, b) { return a.dt - b.dt; });
+    return msgs;
+  }
+
+  /** Formato Android clásico: "23/12/2025, 2:04 p. m. - Autor: texto". */
+  function parseAndroid(text) {
     var lines = String(text).split(/\r?\n/);
     var msgs = [];
     var cur = null;
@@ -359,7 +458,7 @@
     { key: 'cambio_equipo', label: 'Cambio de equipo / serie',
       pats: ['cambio.*equipo', 'cambiar.*equipo', '\\bmac\\b', '\\bserial\\b', '\\bkaon\\b', 'se.*cambio.*equipo'] }
   ];
-  var CAT_LABEL = { 'solo_codigo': 'Solo código / seguimiento corto', 'otros': 'Otros / sin clasificar' };
+  var CAT_LABEL = { 'solo_codigo': 'Solo código / seguimiento corto', 'otros': 'Otros / sin clasificar', 'activacion_mta': 'Activación MTA/EMTA' };
   CATALOG.forEach(function (c) { CAT_LABEL[c.key] = c.label; });
   var CAT_RES = CATALOG.map(function (c) {
     return { key: c.key, res: c.pats.map(function (p) { return new RegExp(p); }) };
