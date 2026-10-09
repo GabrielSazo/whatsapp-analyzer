@@ -237,13 +237,13 @@
     var names = state.support.slice().sort(function (a, b) { return a.localeCompare(b, 'es'); });
     addMultiRow(box, '', 'Todos', state.respFilter.length === 0, true, function () {
       state.respFilter = [];
-      syncRespPanel(); updateMultiLabels(); state.page = 0; applyFilters();
+      syncRespPanel(); updateMultiLabels(); renderAll();
     });
     names.forEach(function (n) {
       addMultiRow(box, n, n, state.respFilter.indexOf(n) !== -1, false, function (on) {
         if (on) { if (state.respFilter.indexOf(n) === -1) state.respFilter.push(n); }
         else state.respFilter = state.respFilter.filter(function (x) { return x !== n; });
-        syncRespPanel(); updateMultiLabels(); state.page = 0; applyFilters();
+        syncRespPanel(); updateMultiLabels(); renderAll();
       });
     });
   }
@@ -261,6 +261,12 @@
     if (!state.months.length) return '';
     if (state.months.length === 1) return ' · ' + monthLabel(state.months[0]);
     return ' · ' + state.months.length + ' meses';
+  }
+
+  function respScope() {
+    if (!state.respFilter.length) return '';
+    if (state.respFilter.length === 1) return ' · responde ' + state.respFilter[0];
+    return ' · responden ' + state.respFilter.length;
   }
 
   function recompute() {
@@ -315,10 +321,13 @@
     var pool = state.group
       ? state.result.tickets.filter(function (t) { return t.grp === state.group; })
       : state.result.tickets;
+    if (state.respFilter.length) {
+      pool = pool.filter(function (t) { return state.respFilter.indexOf(t.responder) !== -1; });
+    }
     state.monthFiltered = state.months.length
       ? pool.filter(function (t) { return state.months.indexOf(WAParser.monthKey(t.requestedAt)) !== -1; })
       : pool;
-    var scope = (state.group ? ' · ' + state.group : '') + monthScope();
+    var scope = (state.group ? ' · ' + state.group : '') + monthScope() + respScope();
     var s = WAParser.summarize(state.monthFiltered);
     s.windowHours = parseInt($('optWindow').value, 10);
     renderKpis(s, scope);
@@ -529,7 +538,6 @@
       if (st === 'reabierto' ? !t.reopened : (st && t.status !== st)) return false;
       if (rg && WAParser.rangeOf(t.minutesToResponse) !== rg) return false;
       if (ty && t.reqType !== ty) return false;
-      if (state.respFilter.length && state.respFilter.indexOf(t.responder) === -1) return false;
       if (cf && t.confidence !== cf && t.status !== 'pendiente') return false;
       if (q && (t.code + ' ' + (t.grp || '') + ' ' + t.requester + ' ' + (t.responder || '') + ' ' + (t.reqTypeLabel || '')).toLowerCase().indexOf(q) === -1) return false;
       return true;
