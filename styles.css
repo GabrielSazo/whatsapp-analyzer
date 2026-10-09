@@ -68,6 +68,12 @@ thead th{position:sticky;top:0;background:var(--panel2)}
 .seg.active{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
 .seg b{display:block;font-size:18px}
 .seg span{color:var(--mut);font-size:12px}
+.dd{position:relative}
+.dd .btn{width:100%;text-align:left}
+.dd-panel{position:absolute;top:calc(100% + 4px);left:0;min-width:220px;max-height:260px;overflow:auto;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:6px;z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.dd-panel label{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:6px;font-size:13.5px;cursor:pointer;color:var(--txt)}
+.dd-panel label:hover{background:var(--panel2)}
+.dd-panel label.all{font-weight:600;border-bottom:1px solid var(--line)}
 .conf{color:var(--mut);font-size:12px}
 .pager{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
 .drawer{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;justify-content:flex-end;z-index:10}

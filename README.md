@@ -15,7 +15,8 @@ Todo se procesa **en tu navegador, 100% local**. El archivo nunca se sube a ning
    separado — las respuestas nunca cruzan de un grupo a otro — y puedes filtrar por grupo.
 4. Ajusta la **ventana de respuesta** (4h / 8h / 24h / 7d) y el filtro
    **Solo contar respuesta del equipo de soporte** + el roster sugerido.
-5. Filtra por estado/confianza/rango/tipo/búsqueda, abre el **detalle** de cada ticket y
+5. Filtra por estado/confianza/rango/tipo/**meses**/**respondedor** (estos dos últimos
+   admiten selección múltiple, con opción Todos), abre el **detalle** de cada ticket y
    **exporta CSV/JSON** para Excel o reportes.
 
 ## Catálogo de tipos de solicitud

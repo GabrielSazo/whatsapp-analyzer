@@ -46,9 +46,16 @@
       </label>
       <label class="check"><input type="checkbox" id="optSupportOnly"> Solo contar respuesta del equipo de soporte</label>
       <label>Mes
-        <select id="fMonth">
-          <option value="">Todos</option>
-        </select>
+        <div class="dd">
+          <button id="btnMonth" class="btn ghost" type="button">Mes: Todos</button>
+          <div id="monthPanel" class="dd-panel" hidden></div>
+        </div>
+      </label>
+      <label>Responde
+        <div class="dd">
+          <button id="btnResp" class="btn ghost" type="button">Responde: Todos</button>
+          <div id="respPanel" class="dd-panel" hidden></div>
+        </div>
       </label>
       <label>Grupo
         <select id="fGroup">
