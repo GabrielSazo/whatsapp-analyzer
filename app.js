@@ -389,7 +389,7 @@
       kpi(s.responded.toLocaleString('es-GT') + ' (' + s.responseRate + '%)', 'respondidos', 'good', 'Tickets con al menos una respuesta dentro de la ventana') +
       kpi(s.pending.toLocaleString('es-GT'), 'pendientes', s.pending ? 'bad' : '', 'Tickets sin respuesta dentro de la ventana: requieren seguimiento') +
       kpi(s.reopened.toLocaleString('es-GT'), 'reabiertos', '', 'Respondidos que volvieron a moverse después: nueva solicitud o seguimiento') +
-      kpi(s.escalated.toLocaleString('es-GT'), 'escalados', s.escalated ? 'warn' : '', 'Tickets que soporte escaló a otro grupo/equipo ("se escaló", "déjalo en escalamiento"): cuenta como respuesta del equipo') +
+      kpi(s.escalated.toLocaleString('es-GT'), 'escalados', s.escalated ? 'warn' : '', 'Tickets cuya primera respuesta fue un escalamiento a otro grupo/equipo ("se escaló", "déjalo en escalamiento"): cuenta como respuesta del equipo') +
       kpi(fmtDur(s.medianMinutes), 'mediana 1ª respuesta', '', 'El 50% se respondió en este tiempo o menos: el caso típico') +
       kpi(fmtDur(s.p90Minutes), 'p90 1ª respuesta', 'warn', 'El 90% se respondió en este tiempo o menos: el grueso del servicio') +
       kpi(fmtDur(s.avgMinutes), 'promedio 1ª respuesta', '', 'Media aritmética: sube si hay casos extremos muy lentos');
@@ -598,7 +598,7 @@
         : '<p><strong>Sin respuesta</strong> dentro de la ventana de ' + esc($('optWindow').value) + ' h.</p>') +
       (t.escalated
         ? '<p><strong>🔺 Escalado:</strong> ' + esc(t.escalatedBy) + ' · ' + esc(fmtDate(t.escalatedAt)) +
-          (t.escalatedAt && t.respondedAt && t.escalatedAt.getTime() === t.respondedAt.getTime() ? ' · fue la primera respuesta' : ' · después de la primera respuesta') + '</p>' +
+          ' · la primera respuesta fue escalarlo</p>' +
           '<div class="tl-item"><div class="txt">' + esc(t.escalatedText || '') + '</div></div>'
         : '') +
       (t.reopened

@@ -237,6 +237,16 @@
         (byTicket[t] = byTicket[t] || []).push({ i: i, author: m.author });
       });
     });
+    // Último código de ticket mencionado hasta cada posición: sirve para que un
+    // escalamiento SIN código se lo atribuyamos solo al ticket más reciente
+    // mencionado antes del mensaje (un solo "se escaló" no marca varios tickets).
+    var lastCodeAt = new Array(chat.length);
+    var lastCode = null;
+    chat.forEach(function (m, i) {
+      var ts = ticketsOf(m.body);
+      if (ts.length) lastCode = ts[ts.length - 1];
+      lastCodeAt[i] = lastCode;
+    });
 
     var tickets = Object.keys(firstByTicket).map(function (code) {
       var f = firstByTicket[code];
@@ -255,10 +265,16 @@
           // Un escalamiento explícito cuenta como respuesta del equipo aunque no traiga
           // código ni encaje en los patrones de confirmación.
           if (!esc) continue;
+          // Sin código: solo se lo atribuimos si la mención de ticket más reciente
+          // antes de este mensaje es este mismo ticket.
+          if (!ts.length && lastCodeAt[j - 1] !== code) continue;
           found = { msg: m, confidence: 'media', escalated: true };
           foundIdx = j;
           break;
         }
+        // Escalamiento sin código (entró por la regla de mensaje corto): misma
+        // exclusividad, para que un solo "se escaló" no se lo atribuyan varios tickets.
+        if (esc && !ts.length && lastCodeAt[j - 1] !== code) continue;
         found = { msg: m, confidence: ri.confidence, escalated: esc };
         foundIdx = j;
         break;
@@ -284,23 +300,10 @@
         }
       }
       var reqType = classifyRequest(f.msg.body);
-      // Escalamiento: el primer mensaje que marca escalamiento dentro de la ventana,
-      // ya sea la primera respuesta o uno posterior (respondieron y luego lo escalaron).
-      var escMsg = null;
-      // Se escanea el tramo posterior a la primera respuesta hasta la ventana,
-      // igual que con las reaperturas (el mensaje de escalamiento puede no traer código).
-      if (found && !found.escalated) {
-        for (var e = foundIdx + 1; e < chat.length; e++) {
-          var me = chat[e];
-          if (me.dt - f.msg.dt > windowMs) break;
-          if (me.author === f.msg.author) continue;
-          if (supportSet && !supportSet[String(me.author).toLowerCase()]) continue;
-          var tse = ticketsOf(me.body);
-          if (tse.length && tse.indexOf(code) === -1) continue;
-          if (isEscalation(me.body)) { escMsg = me; break; }
-        }
-      }
-      if (found && found.escalated) escMsg = found.msg;
+      // Escalamiento: solo cuenta si el mensaje de PRIMERA respuesta del ticket dice que se
+      // escala. Mensajes posteriores no marcan, para no atribuir el mismo escalamiento a
+      // varios tickets vivos en el mismo rango.
+      var escMsg = found && found.escalated ? found.msg : null;
       return {
         code: code,
         requester: f.msg.author,
