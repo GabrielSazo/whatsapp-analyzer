@@ -346,8 +346,9 @@
     tb.innerHTML = rows.map(function (r) {
       return '<tr data-k="' + esc(r.key) + '" class="' + (cur === r.key ? 'active' : '') + '">' +
         '<td>' + esc(r.label) + '</td><td>' + r.count.toLocaleString('es-GT') + '</td>' +
-        '<td>' + r.pct + '%</td><td>' + esc(fmtDur(r.avg)) + '</td><td>' + r.pending.toLocaleString('es-GT') + '</td></tr>';
-    }).join('') || '<tr><td colspan="5" class="muted">Sin datos</td></tr>';
+        '<td>' + r.pct + '%</td><td>' + esc(fmtDur(r.avg)) + '</td><td>' + r.pending.toLocaleString('es-GT') + '</td>' +
+        '<td>' + r.escalated.toLocaleString('es-GT') + '</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="muted">Sin datos</td></tr>';
     tb.querySelectorAll('tr[data-k]').forEach(function (tr) {
       tr.style.cursor = 'pointer';
       tr.addEventListener('click', function () {
@@ -388,6 +389,7 @@
       kpi(s.responded.toLocaleString('es-GT') + ' (' + s.responseRate + '%)', 'respondidos', 'good', 'Tickets con al menos una respuesta dentro de la ventana') +
       kpi(s.pending.toLocaleString('es-GT'), 'pendientes', s.pending ? 'bad' : '', 'Tickets sin respuesta dentro de la ventana: requieren seguimiento') +
       kpi(s.reopened.toLocaleString('es-GT'), 'reabiertos', '', 'Respondidos que volvieron a moverse después: nueva solicitud o seguimiento') +
+      kpi(s.escalated.toLocaleString('es-GT'), 'escalados', s.escalated ? 'warn' : '', 'Tickets que soporte escaló a otro grupo/equipo ("se escaló", "déjalo en escalamiento"): cuenta como respuesta del equipo') +
       kpi(fmtDur(s.medianMinutes), 'mediana 1ª respuesta', '', 'El 50% se respondió en este tiempo o menos: el caso típico') +
       kpi(fmtDur(s.p90Minutes), 'p90 1ª respuesta', 'warn', 'El 90% se respondió en este tiempo o menos: el grueso del servicio') +
       kpi(fmtDur(s.avgMinutes), 'promedio 1ª respuesta', '', 'Media aritmética: sube si hay casos extremos muy lentos');
@@ -535,7 +537,7 @@
     var st = $('fStatus').value, cf = $('fConf').value, rg = $('fRange').value, ty = $('fType').value;
     var base = state.monthFiltered;
     state.filtered = base.filter(function (t) {
-      if (st === 'reabierto' ? !t.reopened : (st && t.status !== st)) return false;
+      if (st === 'reabierto' ? !t.reopened : st === 'escalado' ? !t.escalated : (st && t.status !== st)) return false;
       if (rg && WAParser.rangeOf(t.minutesToResponse) !== rg) return false;
       if (ty && t.reqType !== ty) return false;
       if (cf && t.confidence !== cf && t.status !== 'pendiente') return false;
@@ -571,6 +573,7 @@
         '<td>' + esc(fmtDate(t.requestedAt)) + '</td><td>' + esc(t.responder || '—') + '</td>' +
         '<td>' + esc(fmtDur(t.minutesToResponse)) + '</td>' +
         '<td><span class="pill ' + (t.status === 'respondido' ? 'ok' : 'pend') + '">' + t.status + '</span>' +
+        (t.escalated ? '<span class="pill esc" title="Soporte lo escaló a otro grupo: ' + esc((t.escalatedText || '').slice(0, 120)) + '">escalamiento</span>' : '') +
         (t.reopened ? '<span class="pill warn" title="Volvió a moverse después de respondido">reabierto</span>' : '') + '</td>' +
         '<td class="conf">' + esc(t.confidence || '—') + '</td>' +
         '<td><button class="btn ghost" data-i="' + idx + '">Ver</button></td></tr>';
@@ -593,6 +596,11 @@
           ' · <strong>' + esc(fmtDur(t.minutesToResponse)) + '</strong> después (confianza ' + esc(t.confidence) + ')</p>' +
           '<div class="tl-item"><div class="txt">' + esc(t.responseText || '') + '</div></div>'
         : '<p><strong>Sin respuesta</strong> dentro de la ventana de ' + esc($('optWindow').value) + ' h.</p>') +
+      (t.escalated
+        ? '<p><strong>🔺 Escalado:</strong> ' + esc(t.escalatedBy) + ' · ' + esc(fmtDate(t.escalatedAt)) +
+          (t.escalatedAt && t.respondedAt && t.escalatedAt.getTime() === t.respondedAt.getTime() ? ' · fue la primera respuesta' : ' · después de la primera respuesta') + '</p>' +
+          '<div class="tl-item"><div class="txt">' + esc(t.escalatedText || '') + '</div></div>'
+        : '') +
       (t.reopened
         ? '<p><strong>↩ Reabierto:</strong> ' + esc(t.reopenedBy) + ' · ' + esc(fmtDate(t.reopenedAt)) +
           (t.reopenCount > 1 ? ' · ' + t.reopenCount + ' menciones posteriores' : '') + '</p>' +
@@ -639,10 +647,11 @@
   }
   $('btnCsv').addEventListener('click', function () {
     if (!state.result) return;
-    var head = 'codigo,grupo,tipo_solicitud,solicitante,fecha_solicitud,respondedor,fecha_respuesta,minutos_respuesta,estado,confianza,menciones,reabierto,quien_reabre,fecha_reapertura\n';
+    var head = 'codigo,grupo,tipo_solicitud,solicitante,fecha_solicitud,respondedor,fecha_respuesta,minutos_respuesta,estado,confianza,menciones,escalado,quien_escala,fecha_escalamiento,texto_escalamiento,reabierto,quien_reabre,fecha_reapertura\n';
     var body = state.filtered.map(function (t) {
       return [t.code, t.grp || '', t.reqTypeLabel || t.reqType || '', t.requester, fmtDate(t.requestedAt), t.responder || '', t.respondedAt ? fmtDate(t.respondedAt) : '',
         t.minutesToResponse == null ? '' : t.minutesToResponse, t.status, t.confidence || '', t.messageCount,
+        t.escalated ? 'si' : 'no', t.escalatedBy || '', t.escalatedAt ? fmtDate(t.escalatedAt) : '', t.escalatedText || '',
         t.reopened ? 'si' : 'no', t.reopenedBy || '', t.reopenedAt ? fmtDate(t.reopenedAt) : '']
         .map(csvCell).join(',');
     }).join('\n');

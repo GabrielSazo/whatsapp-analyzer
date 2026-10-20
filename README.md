@@ -58,6 +58,7 @@ filtra la tabla de tickets. Respeta los filtros de grupo y mes.
   - repite el mismo código → confianza **alta**, o
   - parece confirmación/gestión (`listo`, `ok`, `quedó`, `te apoyo`, `qué error…`, `ca/cm/bbi/mta…` + números) → confianza **alta/media**.
 - Los mensajes que abren **otro ticket distinto** se omiten (son otra solicitud, no tu respuesta).
+- **Escalamiento** = si el equipo dice `se escaló`, `escalado`, `en escalamiento`, `déjalo en escalamiento`, `nivel 2…`, eso **cuenta como respuesta** (confianza media si no trae código) y el ticket se marca como **escalado** (pill morado, KPI, filtro *Escalados* y columna *Escal.* en el catálogo). No aplica a frases como "escala de línea".
 - **Pendiente** = nadie respondió dentro de la ventana.
 
 > En grupos muy activos la atribución secuencial puede confundir tickets cruzados.

@@ -26,6 +26,15 @@
   var CONFIRM_RE = /^(listo|lista|ok|okay|hecho|ya\b|ya qued|qued[oó]|resuelto|solucionado|terminado|enterado|recibido|visto|va\b|voy|revisado|revisando|apoyo|te apoyo|dame|p[aá]same|qu[eé] error|cu[aá]l es|manda|env[ií]a)/i;
   var EQUIP_RE = /\b(ca|cm|bbi|mta|emta|ont|oha|ot|ct|as400|intraway|retirar|baja|activaci[oó]n|c[oó]digo|serial|mac|anexo|grilla|t[cv]|poste|extensor|supervisor|aut)\b[:\s]/i;
 
+  // Mensajes de escalamiento a otro grupo/equipo: "se escaló", "lo dejo en escalamiento",
+  // "escalado a nivel 2", "déjala en escalamiento", etc. Ojo: NO matchea "escala de línea".
+  var ESCALATE_RE = /\b(se escal[a-záéíóú]*|escalad[a-záéíóú]*|escalamiento|dej\w*\s+(?:en|a)\s+escala\w*|a escalamiento|en escalamiento|nivel\s*(?:2|dos))\b/i;
+
+  /** ¿El mensaje indica que el caso se escaló a otro grupo? */
+  function isEscalation(body) {
+    return ESCALATE_RE.test(String(body || ''));
+  }
+
   function normalizeSpaces(s) {
     return String(s == null ? '' : s).replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/g, ' ');
   }
@@ -239,14 +248,18 @@
         if (supportSet && !supportSet[String(m.author).toLowerCase()]) continue;
         // Sin filtro de soporte, un mensaje que abre otro ticket no es respuesta; con filtro sí se omite igual.
         var ri = responseInfo(m, code);
+        var ts = ticketsOf(m.body);
+        var esc = isEscalation(m.body);
         if (!ri.ok) {
-          var ts = ticketsOf(m.body);
           if (ts.length && ts.indexOf(code) === -1) continue; // otra solicitud: seguir buscando
-          // Mensaje largo sin relación: se cuenta como "ruido" solo si no hay filtro de soporte;
-          // con filtro de soporte igual se ignora para no atribuir mal.
-          continue;
+          // Un escalamiento explícito cuenta como respuesta del equipo aunque no traiga
+          // código ni encaje en los patrones de confirmación.
+          if (!esc) continue;
+          found = { msg: m, confidence: 'media', escalated: true };
+          foundIdx = j;
+          break;
         }
-        found = { msg: m, confidence: ri.confidence };
+        found = { msg: m, confidence: ri.confidence, escalated: esc };
         foundIdx = j;
         break;
       }
@@ -271,6 +284,23 @@
         }
       }
       var reqType = classifyRequest(f.msg.body);
+      // Escalamiento: el primer mensaje que marca escalamiento dentro de la ventana,
+      // ya sea la primera respuesta o uno posterior (respondieron y luego lo escalaron).
+      var escMsg = null;
+      // Se escanea el tramo posterior a la primera respuesta hasta la ventana,
+      // igual que con las reaperturas (el mensaje de escalamiento puede no traer código).
+      if (found && !found.escalated) {
+        for (var e = foundIdx + 1; e < chat.length; e++) {
+          var me = chat[e];
+          if (me.dt - f.msg.dt > windowMs) break;
+          if (me.author === f.msg.author) continue;
+          if (supportSet && !supportSet[String(me.author).toLowerCase()]) continue;
+          var tse = ticketsOf(me.body);
+          if (tse.length && tse.indexOf(code) === -1) continue;
+          if (isEscalation(me.body)) { escMsg = me; break; }
+        }
+      }
+      if (found && found.escalated) escMsg = found.msg;
       return {
         code: code,
         requester: f.msg.author,
@@ -285,6 +315,10 @@
         messageCount: mentions[code] || 0,
         status: found ? 'respondido' : 'pendiente',
         confidence: found ? found.confidence : null,
+        escalated: !!escMsg,
+        escalatedBy: escMsg ? escMsg.author : null,
+        escalatedAt: escMsg ? escMsg.dt : null,
+        escalatedText: escMsg ? escMsg.body.split('\n')[0].slice(0, 280) : null,
         reopened: !!reopened,
         reopenedBy: reopened ? reopened.msg.author : null,
         reopenedAt: reopened ? reopened.msg.dt : null,
@@ -373,6 +407,7 @@
     }
     var avg = diffs.length ? diffs.reduce(function (a, b) { return a + b; }, 0) / diffs.length : null;
     var reopenedCount = tickets.filter(function (t) { return t.reopened; }).length;
+    var escalatedCount = tickets.filter(function (t) { return t.escalated; }).length;
     var ranges = { '0-3': 0, '3-6': 0, '6-10': 0, '+10': 0 };
     responded.forEach(function (t) { ranges[rangeOf(t.minutesToResponse)]++; });
     return {
@@ -380,6 +415,7 @@
       responded: responded.length,
       pending: tickets.length - responded.length,
       reopened: reopenedCount,
+      escalated: escalatedCount,
       responseRate: tickets.length ? Math.round((responded.length / tickets.length) * 1000) / 10 : 0,
       avgMinutes: avg != null ? Math.round(avg * 10) / 10 : null,
       medianMinutes: pct(0.5),
@@ -497,11 +533,12 @@
     var map = {};
     tickets.forEach(function (t) {
       var k = t.reqType || 'otros';
-      var e = map[k] = map[k] || { key: k, count: 0, sum: 0, timed: 0, pending: 0, reopened: 0 };
+      var e = map[k] = map[k] || { key: k, count: 0, sum: 0, timed: 0, pending: 0, reopened: 0, escalated: 0 };
       e.count++;
       if (t.minutesToResponse != null) { e.sum += t.minutesToResponse; e.timed++; }
       if (t.status === 'pendiente') e.pending++;
       if (t.reopened) e.reopened++;
+      if (t.escalated) e.escalated++;
     });
     var total = tickets.length || 1;
     return Object.keys(map).map(function (k) {
@@ -509,7 +546,7 @@
       return { key: k, label: CAT_LABEL[k] || k, count: e.count,
         pct: Math.round((e.count / total) * 1000) / 10,
         avg: e.timed ? Math.round((e.sum / e.timed) * 10) / 10 : null,
-        pending: e.pending, reopened: e.reopened };
+        pending: e.pending, reopened: e.reopened, escalated: e.escalated };
     }).sort(function (a, b) { return b.count - a.count; });
   }
 
@@ -528,6 +565,7 @@
     rangeOf: rangeOf,
     RANGE_LABELS: RANGE_LABELS,
     classifyRequest: classifyRequest,
+    isEscalation: isEscalation,
     catalog: catalog,
     CAT_LABEL: CAT_LABEL,
     topFrom: topFrom,

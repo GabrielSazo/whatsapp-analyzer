@@ -111,7 +111,7 @@
       <h2>Catálogo de solicitudes</h2>
       <p class="muted small">Tipo detectado automáticamente del texto de cada solicitud. Clic en una fila para filtrar la tabla de tickets.</p>
       <div class="table-wrap flat"><table class="mini">
-        <thead><tr><th>Tipo de solicitud</th><th>Tickets</th><th>%</th><th>Tpo. prom.</th><th>Pend.</th></tr></thead>
+        <thead><tr><th>Tipo de solicitud</th><th>Tickets</th><th>%</th><th>Tpo. prom.</th><th>Pend.</th><th title="Tickets que soporte escaló a otro grupo">Escal.</th></tr></thead>
         <tbody id="catBody"></tbody>
       </table></div>
     </div>
@@ -125,6 +125,7 @@
           <option value="respondido">Respondidos</option>
           <option value="pendiente">Pendientes</option>
           <option value="reabierto">Reabiertos</option>
+          <option value="escalado">Escalados</option>
         </select>
         <select id="fRange">
           <option value="">Todo tiempo</option>
